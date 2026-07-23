@@ -97,6 +97,7 @@
           <input type="number" id="price-input" min="0" step="1" value="0" />
         </div>
       </div>
+      <p class="hint error" id="table-form-error" hidden></p>
       <button type="submit">Create table</button>
     </form>
   </div>
@@ -138,6 +139,7 @@
     const tableRowsEl = document.getElementById("table-rows");
     const noTablesEl = document.getElementById("no-tables");
     const createFormEl = document.getElementById("create-form");
+    const tableFormErrorEl = document.getElementById("table-form-error");
     const labelInputEl = document.getElementById("label-input");
     const kindInputEl = document.getElementById("kind-input");
     const priceFieldEl = document.getElementById("price-field");
@@ -200,12 +202,20 @@
       const kind = kindInputEl.value;
       const pricePerUse = kind === "private" ? 0 : Number(priceInputEl.value) || 0;
 
-      await fetch(`/admin/venues/${venueId}/tables`, {
+      const res = await fetch(`/admin/venues/${venueId}/tables`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label, kind, pricePerUse }),
       });
 
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        tableFormErrorEl.textContent = body.error || "Something went wrong — try again.";
+        tableFormErrorEl.hidden = false;
+        return;
+      }
+
+      tableFormErrorEl.hidden = true;
       labelInputEl.value = "";
       priceInputEl.value = "0";
       await loadTables();
@@ -265,11 +275,18 @@
         return;
       }
 
-      await fetch(`/admin/venues/${venueId}/playlist-tracks`, {
+      const res = await fetch(`/admin/venues/${venueId}/playlist-tracks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, songRef: videoId }),
       });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        playlistHintEl.textContent = body.error || "Something went wrong — try again.";
+        playlistHintEl.classList.add("error");
+        return;
+      }
 
       playlistTitleInputEl.value = "";
       playlistSongInputEl.value = "";
