@@ -462,3 +462,29 @@ test("player routes 404 for an unknown token", async () => {
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
+
+test("GET /player/:token serves the player HTML page for a valid token", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const playerToken = await createPlayerToken(port);
+
+  const res = await fetch(`http://127.0.0.1:${port}/player/${playerToken}`);
+  const body = await res.text();
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type"), /text\/html/);
+  assert.match(body, /iframe_api/);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /player/:token 404s for an unknown token", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(`http://127.0.0.1:${port}/player/nope`);
+  assert.equal(res.status, 404);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});

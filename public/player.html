@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>karaoke-queue player</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    background: #05060a;
+    color: #e8ecf1;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  #player-column { flex: 1; display: flex; flex-direction: column; }
+  #yt-player-wrap { flex: 1; background: #000; }
+  #yt-player { width: 100%; height: 100%; }
+  #idle-message {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: #6b7280;
+  }
+  #sidebar {
+    width: 280px;
+    background: #12141a;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  #sidebar h2 { font-size: 0.95rem; color: #9aa3b2; margin: 0 0 12px; }
+  ol#side-queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  ol#side-queue li {
+    background: #1a1d24;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  ol#side-queue li .position { color: #6ee7ff; font-weight: 700; }
+</style>
+</head>
+<body>
+  <div id="player-column">
+    <div id="idle-message" hidden>Waiting for requests…</div>
+    <div id="yt-player-wrap" hidden><div id="yt-player"></div></div>
+  </div>
+  <div id="sidebar">
+    <h2>Up next</h2>
+    <ol id="side-queue"></ol>
+    <p id="side-empty" hidden style="color:#6b7280;font-size:0.9rem;">Nothing waiting.</p>
+  </div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script type="module">
+    const token = location.pathname.split("/").filter(Boolean)[1];
+    const ytWrapEl = document.getElementById("yt-player-wrap");
+    const idleEl = document.getElementById("idle-message");
+    const sideQueueEl = document.getElementById("side-queue");
+    const sideEmptyEl = document.getElementById("side-empty");
+
+    let ytPlayer = null;
+    let ytReady = false;
+    let pendingVideoId = null;
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    window.onYouTubeIframeAPIReady = function () {
+      ytPlayer = new YT.Player("yt-player", {
+        height: "100%",
+        width: "100%",
+        events: {
+          onReady: () => {
+            ytReady = true;
+            if (pendingVideoId) {
+              ytPlayer.loadVideoById(pendingVideoId);
+              pendingVideoId = null;
+            }
+          },
+          onStateChange: onPlayerStateChange,
+        },
+      });
+    };
+
+    function playVideo(videoId) {
+      idleEl.hidden = true;
+      ytWrapEl.hidden = false;
+      if (ytReady) {
+        ytPlayer.loadVideoById(videoId);
+      } else {
+        pendingVideoId = videoId;
+      }
+    }
+
+    function showIdle() {
+      ytWrapEl.hidden = true;
+      idleEl.hidden = false;
+    }
+
+    async function onPlayerStateChange(event) {
+      if (event.data === YT.PlayerState.ENDED) {
+        await advance();
+      }
+    }
+
+    function renderSideQueue(queued) {
+      sideQueueEl.innerHTML = "";
+      if (queued.length === 0) {
+        sideEmptyEl.hidden = false;
+        return;
+      }
+      sideEmptyEl.hidden = true;
+      queued.forEach((entry, i) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<span class="position">${i + 1}</span><span>${escapeHtml(entry.songTitle)}</span>`;
+        sideQueueEl.appendChild(li);
+      });
+    }
+
+    function applyNowPlaying(nowPlaying) {
+      if (nowPlaying) {
+        playVideo(nowPlaying.songRef);
+      } else {
+        showIdle();
+      }
+    }
+
+    async function advance() {
+      const res = await fetch(`/player/${token}/advance`, { method: "POST" });
+      const result = await res.json();
+      if (result.type === "request") {
+        playVideo(result.entry.songRef);
+      } else if (result.type === "playlist") {
+        playVideo(result.track.song_ref);
+      } else {
+        showIdle();
+      }
+    }
+
+    async function loadInitialState() {
+      const res = await fetch(`/player/${token}/state`);
+      const state = await res.json();
+      renderSideQueue(state.queued);
+      if (state.nowPlaying) {
+        applyNowPlaying(state.nowPlaying);
+      } else {
+        // Nothing has ever played (or the page reloaded mid-idle) —
+        // kick off playback rather than sitting idle forever.
+        await advance();
+      }
+    }
+
+    function connectSocket() {
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${proto}//${location.host}`);
+      ws.addEventListener("message", (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === "queue-state") {
+          // Only keep the side panel live — playback itself is driven
+          // solely by advance() calls (page load + video-ended), never
+          // by a WS push, so a table enqueuing/cancelling never
+          // interrupts whatever is currently playing.
+          renderSideQueue(message.queued);
+        }
+      });
+      ws.addEventListener("close", () => {
+        setTimeout(connectSocket, 2000);
+      });
+    }
+
+    loadInitialState();
+    connectSocket();
+  </script>
+</body>
+</html>

@@ -11,6 +11,7 @@ import { Router } from "./router.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TABLE_HTML = readFileSync(path.join(__dirname, "..", "public", "table.html"), "utf8");
+const PLAYER_HTML = readFileSync(path.join(__dirname, "..", "public", "player.html"), "utf8");
 const YOUTUBE_JS = readFileSync(path.join(__dirname, "youtube.js"), "utf8");
 
 function sendJson(res, status, body) {
@@ -211,6 +212,14 @@ function buildRouter(db, getWss) {
       broadcastToClients(getWss(), db, resolved.venueId);
     }
     sendJson(res, 200, { cancelled });
+  });
+
+  router.add("GET", "/player/:token", async (req, res, params) => {
+    const resolved = resolvePlayerToken(db, params.token);
+    if (!resolved) {
+      return sendJson(res, 404, { error: "unknown player" });
+    }
+    sendHtml(res, 200, PLAYER_HTML);
   });
 
   router.add("GET", "/player/:token/state", async (req, res, params) => {
