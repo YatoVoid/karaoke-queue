@@ -27,6 +27,13 @@
     background: var(--bg);
     color: var(--text);
     padding: 24px 16px 48px;
+    /* Without this, content stretches full-bleed on a large/wide
+       display (a real monitor, or a browser window maximized on one) —
+       inputs and buttons spanning 3000+ px look lost and unreadable.
+       Matches admin.html's existing max-width, for visual consistency
+       across the whole product too. */
+    max-width: 720px;
+    margin-inline: auto;
   }
   h1 { font-size: 1.1rem; color: var(--text-dim); font-weight: 600; margin: 0 0 4px; }
   .now-playing {
