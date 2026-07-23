@@ -143,12 +143,11 @@
     let myTableId = null;
     let myPricePerUse = null;
 
-    // No YouTube Data API key is available in this environment (would
-    // need the venue operator's own Google Cloud credential), so there is
-    // no way to fetch a real video title — the "title" is just whatever
-    // text the requester pasted. YouTube's static thumbnail images,
-    // however, need no key at all, so at least a recognizable picture is
-    // shown alongside the raw text.
+    // The server fetches the real YouTube title via the official,
+    // keyless oEmbed endpoint whenever it can (see src/youtube.js's
+    // fetchOembedTitle) — the raw pasted text is only ever shown as a
+    // fallback if that lookup fails. Thumbnails are always YouTube's
+    // static images, which need no key either way.
     function thumbnailUrl(songRef) {
       return `https://img.youtube.com/vi/${songRef}/default.jpg`;
     }

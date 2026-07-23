@@ -83,7 +83,11 @@ remembers.
   search needs the YouTube Data API, which requires a Google Cloud
   credential this project doesn't have and can't provision — a venue
   operator with their own API key could wire this in as a future
-  enhancement.
+  enhancement. (Once a link is pasted, though, the real video title is
+  fetched automatically via YouTube's official, keyless oEmbed
+  endpoint — a different, credential-free API — so the queue shows the
+  actual song title, not the raw link, falling back to the pasted text
+  only if that lookup fails.)
 - **No payment processing.** The price shown on a public table's page is
   for staff to notice and manually add to the bill at checkout — this
   software has no card/payment integration.
