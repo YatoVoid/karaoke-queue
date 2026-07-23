@@ -173,6 +173,44 @@ test("GET /t/:token/state returns 404 for an unknown token", async () => {
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
 
+test("GET /t/:token serves the table HTML page for a valid token", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  const res = await fetch(`http://127.0.0.1:${port}/t/${token}`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type"), /text\/html/);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /t/:token 404s for an unknown token", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(`http://127.0.0.1:${port}/t/not-a-real-token`);
+  assert.equal(res.status, 404);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /youtube.js serves the video-ID extractor as JS", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(`http://127.0.0.1:${port}/youtube.js`);
+  const body = await res.text();
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type"), /javascript/);
+  assert.match(body, /extractVideoId/);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
 test("POST /t/:token/queue enqueues, and GET /t/:token/state reflects it", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });

@@ -1,13 +1,25 @@
 import { createServer as createHttpServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { WebSocketServer } from "ws";
 import { nowPlaying, enqueue, cancel, TableAlreadyQueuedError } from "./queueEngine.js";
 import { createPairing, resolveToken } from "./pairing.js";
 import { Router } from "./router.js";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const TABLE_HTML = readFileSync(path.join(__dirname, "..", "public", "table.html"), "utf8");
+const YOUTUBE_JS = readFileSync(path.join(__dirname, "youtube.js"), "utf8");
+
 function sendJson(res, status, body) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(body));
+}
+
+function sendHtml(res, status, body) {
+  res.writeHead(status, { "Content-Type": "text/html; charset=utf-8" });
+  res.end(body);
 }
 
 function readJsonBody(req) {
@@ -111,6 +123,19 @@ function buildRouter(db, getWss) {
       sendJson(res, 201, { token, url: `/t/${token}` });
     },
   );
+
+  router.add("GET", "/youtube.js", async (req, res) => {
+    res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" });
+    res.end(YOUTUBE_JS);
+  });
+
+  router.add("GET", "/t/:token", async (req, res, params) => {
+    const resolved = resolveToken(db, params.token);
+    if (!resolved) {
+      return sendJson(res, 404, { error: "unknown table" });
+    }
+    sendHtml(res, 200, TABLE_HTML);
+  });
 
   router.add("GET", "/t/:token/state", async (req, res, params) => {
     const resolved = resolveToken(db, params.token);
