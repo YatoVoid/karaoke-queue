@@ -35,6 +35,11 @@ CREATE TABLE IF NOT EXISTS background_playlist_tracks (
   title TEXT NOT NULL,
   song_ref TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS venue_playlist_state (
+  venue_id TEXT PRIMARY KEY,
+  cursor INTEGER NOT NULL DEFAULT 0
+);
 `;
 
 export function openDatabase(path = ":memory:") {

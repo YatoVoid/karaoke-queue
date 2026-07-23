@@ -13,6 +13,7 @@ test("openDatabase creates all expected tables", () => {
     "background_playlist_tracks",
     "queue_entries",
     "tables",
+    "venue_playlist_state",
     "venues",
   ]);
   db.close();
