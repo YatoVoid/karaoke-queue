@@ -15,6 +15,11 @@
     --danger: #ff6e6e;
   }
   * { box-sizing: border-box; }
+  /* The [hidden] attribute is only honored via the UA stylesheet at very
+     low specificity — any element-specific `display` rule below (e.g.
+     `form#request-form { display: flex }`) silently wins over it. Force
+     it to actually work regardless of what else targets the element. */
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     min-height: 100vh;
@@ -144,7 +149,15 @@
     }
 
     function render(state) {
-      myTableId = state.tableId;
+      // WebSocket broadcasts are venue-wide (one shared message for every
+      // connected client, regardless of which table they are), so they
+      // never carry a viewer-specific tableId — only the initial
+      // GET /t/:token/state response does. Only set myTableId when the
+      // incoming payload actually has one; a WS push must never blank out
+      // an already-known identity.
+      if (state.tableId !== undefined) {
+        myTableId = state.tableId;
+      }
 
       nowPlayingEl.innerHTML = state.nowPlaying
         ? `<div class="title-row"><img src="${thumbnailUrl(state.nowPlaying.songRef)}" alt="" /><span class="title">${escapeHtml(state.nowPlaying.songTitle)}</span></div>`
