@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>karaoke-queue admin</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #0f1115;
+    color: #e8ecf1;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 24px 16px 48px;
+    max-width: 720px;
+    margin-inline: auto;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 20px; }
+  h2 { font-size: 1rem; color: #9aa3b2; margin: 28px 0 12px; }
+  .panel { background: #1a1d24; border-radius: 14px; padding: 18px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #2a2d36; font-size: 0.9rem; }
+  th { color: #9aa3b2; font-weight: 600; }
+  form { display: flex; flex-direction: column; gap: 10px; }
+  label { font-size: 0.85rem; color: #9aa3b2; }
+  input[type="text"], input[type="number"], select {
+    font-size: 1rem;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #0b0d11;
+    color: #e8ecf1;
+    width: 100%;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+  button {
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    background: #6ee7ff;
+    color: #062024;
+  }
+  button.small { padding: 6px 10px; font-size: 0.85rem; }
+  code { background: #0b0d11; padding: 3px 6px; border-radius: 6px; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+  <h1>Admin — venue <span id="venue-label"></span></h1>
+
+  <h2>Tables</h2>
+  <div class="panel">
+    <table>
+      <thead>
+        <tr><th>Label</th><th>Kind</th><th>Price</th><th>Pairing</th></tr>
+      </thead>
+      <tbody id="table-rows"></tbody>
+    </table>
+    <p id="no-tables" hidden style="color:#6b7280;">No tables yet.</p>
+  </div>
+
+  <h2>Add a table</h2>
+  <div class="panel">
+    <form id="create-form">
+      <div class="field">
+        <label>Label</label>
+        <input type="text" id="label-input" placeholder="Table 5" required />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Kind</label>
+          <select id="kind-input">
+            <option value="public">Public (pays per use)</option>
+            <option value="private">Private room (free)</option>
+          </select>
+        </div>
+        <div class="field" id="price-field">
+          <label>Price per use</label>
+          <input type="number" id="price-input" min="0" step="1" value="0" />
+        </div>
+      </div>
+      <button type="submit">Create table</button>
+    </form>
+  </div>
+
+  <h2>Player</h2>
+  <div class="panel">
+    <button id="create-player-button">Create player token</button>
+    <p id="player-url" hidden></p>
+  </div>
+
+  <script type="module">
+    const venueId = location.pathname.split("/").filter(Boolean)[2];
+    document.getElementById("venue-label").textContent = venueId;
+
+    const tableRowsEl = document.getElementById("table-rows");
+    const noTablesEl = document.getElementById("no-tables");
+    const createFormEl = document.getElementById("create-form");
+    const labelInputEl = document.getElementById("label-input");
+    const kindInputEl = document.getElementById("kind-input");
+    const priceFieldEl = document.getElementById("price-field");
+    const priceInputEl = document.getElementById("price-input");
+    const createPlayerButtonEl = document.getElementById("create-player-button");
+    const playerUrlEl = document.getElementById("player-url");
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function syncPriceFieldVisibility() {
+      if (kindInputEl.value === "private") {
+        priceFieldEl.hidden = true;
+        priceInputEl.value = "0";
+      } else {
+        priceFieldEl.hidden = false;
+      }
+    }
+    kindInputEl.addEventListener("change", syncPriceFieldVisibility);
+    syncPriceFieldVisibility();
+
+    async function loadTables() {
+      const res = await fetch(`/admin/venues/${venueId}/tables`);
+      const tables = await res.json();
+
+      tableRowsEl.innerHTML = "";
+      noTablesEl.hidden = tables.length > 0;
+
+      tables.forEach((t) => {
+        const tr = document.createElement("tr");
+        const priceText = t.kind === "public" ? String(t.pricePerUse) : "free";
+        const pairingCell = t.pairingUrl
+          ? `<code>${escapeHtml(t.pairingUrl)}</code>`
+          : `<button class="small" data-pair-table-id="${t.id}">Pair</button>`;
+        tr.innerHTML = `<td>${escapeHtml(t.label)}</td><td>${t.kind}</td><td>${priceText}</td><td>${pairingCell}</td>`;
+        tableRowsEl.appendChild(tr);
+      });
+
+      tableRowsEl.querySelectorAll("[data-pair-table-id]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const tableId = btn.dataset.pairTableId;
+          await fetch(`/admin/venues/${venueId}/tables/${tableId}/pair`, { method: "POST" });
+          await loadTables();
+        });
+      });
+    }
+
+    createFormEl.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const label = labelInputEl.value.trim();
+      const kind = kindInputEl.value;
+      const pricePerUse = kind === "private" ? 0 : Number(priceInputEl.value) || 0;
+
+      await fetch(`/admin/venues/${venueId}/tables`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label, kind, pricePerUse }),
+      });
+
+      labelInputEl.value = "";
+      priceInputEl.value = "0";
+      await loadTables();
+    });
+
+    createPlayerButtonEl.addEventListener("click", async () => {
+      const res = await fetch(`/admin/venues/${venueId}/player-token`, { method: "POST" });
+      const body = await res.json();
+      playerUrlEl.textContent = body.url;
+      playerUrlEl.hidden = false;
+    });
+
+    loadTables();
+  </script>
+</body>
+</html>

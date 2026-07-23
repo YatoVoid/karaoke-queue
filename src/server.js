@@ -12,6 +12,7 @@ import { Router } from "./router.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TABLE_HTML = readFileSync(path.join(__dirname, "..", "public", "table.html"), "utf8");
 const PLAYER_HTML = readFileSync(path.join(__dirname, "..", "public", "player.html"), "utf8");
+const ADMIN_HTML = readFileSync(path.join(__dirname, "..", "public", "admin.html"), "utf8");
 const YOUTUBE_JS = readFileSync(path.join(__dirname, "youtube.js"), "utf8");
 
 function sendJson(res, status, body) {
@@ -85,6 +86,10 @@ function buildRouter(db, getWss) {
 
   router.add("GET", "/healthz", async (req, res) => {
     sendJson(res, 200, { ok: true });
+  });
+
+  router.add("GET", "/admin/venues/:venueId", async (req, res) => {
+    sendHtml(res, 200, ADMIN_HTML);
   });
 
   router.add("POST", "/admin/venues/:venueId/tables", async (req, res, params) => {
