@@ -8,6 +8,7 @@ import { nowPlaying, enqueue, cancel, advance, TableAlreadyQueuedError } from ".
 import { createPairing, resolveToken } from "./pairing.js";
 import { createPlayerPairing, resolvePlayerToken } from "./playerPairing.js";
 import { Router } from "./router.js";
+import { extractVideoId } from "./youtube.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TABLE_HTML = readFileSync(path.join(__dirname, "..", "public", "table.html"), "utf8");
@@ -149,6 +150,57 @@ function buildRouter(db, getWss) {
     );
   });
 
+  router.add("GET", "/admin/venues/:venueId/playlist-tracks", async (req, res, params) => {
+    const rows = db
+      .prepare(
+        `SELECT id, position, title, song_ref AS songRef
+         FROM background_playlist_tracks WHERE venue_id = ? ORDER BY position ASC`,
+      )
+      .all(params.venueId);
+    sendJson(res, 200, rows);
+  });
+
+  router.add("POST", "/admin/venues/:venueId/playlist-tracks", async (req, res, params) => {
+    let body;
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      return sendJson(res, 400, { error: "invalid JSON body" });
+    }
+    const { title, songRef } = body;
+    if (typeof title !== "string" || !title.trim()) {
+      return sendJson(res, 400, { error: "title is required" });
+    }
+    const videoId = extractVideoId(songRef);
+    if (!videoId) {
+      return sendJson(res, 400, { error: "songRef must be a valid YouTube link or video ID" });
+    }
+
+    const { nextPosition } = db
+      .prepare(
+        "SELECT COALESCE(MAX(position), -1) + 1 AS nextPosition FROM background_playlist_tracks WHERE venue_id = ?",
+      )
+      .get(params.venueId);
+
+    const id = randomUUID();
+    db.prepare(
+      "INSERT INTO background_playlist_tracks (id, venue_id, position, title, song_ref) VALUES (?, ?, ?, ?, ?)",
+    ).run(id, params.venueId, nextPosition, title, videoId);
+
+    sendJson(res, 201, { id, position: nextPosition, title, songRef: videoId });
+  });
+
+  router.add(
+    "DELETE",
+    "/admin/venues/:venueId/playlist-tracks/:trackId",
+    async (req, res, params) => {
+      const result = db
+        .prepare("DELETE FROM background_playlist_tracks WHERE id = ? AND venue_id = ?")
+        .run(params.trackId, params.venueId);
+      sendJson(res, 200, { deleted: result.changes > 0 });
+    },
+  );
+
   router.add(
     "POST",
     "/admin/venues/:venueId/tables/:tableId/pair",
@@ -215,6 +267,14 @@ function buildRouter(db, getWss) {
     if (typeof songRef !== "string" || !songRef.trim()) {
       return sendJson(res, 400, { error: "songRef is required" });
     }
+    // The table page already extracts a bare video ID client-side before
+    // submitting, but this route is directly reachable regardless of the
+    // page — re-validating here (idempotent against an already-bare ID)
+    // is the actual enforcement point, not the client-side check.
+    const videoId = extractVideoId(songRef);
+    if (!videoId) {
+      return sendJson(res, 400, { error: "songRef must be a valid YouTube link or video ID" });
+    }
 
     let entry;
     try {
@@ -225,7 +285,7 @@ function buildRouter(db, getWss) {
         venueId: resolved.venueId,
         tableId: resolved.tableId,
         songTitle: title,
-        songRef,
+        songRef: videoId,
       });
     } catch (err) {
       if (err instanceof TableAlreadyQueuedError) {

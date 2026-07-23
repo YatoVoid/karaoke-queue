@@ -315,7 +315,7 @@ test("POST /t/:token/queue enqueues, and GET /t/:token/state reflects it", async
   const enqueueRes = await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+    body: JSON.stringify({ title: "Song A", songRef: "aaaaaaaaaaa" }),
   });
   assert.equal(enqueueRes.status, 201);
 
@@ -323,6 +323,46 @@ test("POST /t/:token/queue enqueues, and GET /t/:token/state reflects it", async
   const state = await stateRes.json();
   assert.equal(state.queued.length, 1);
   assert.equal(state.queued[0].songTitle, "Song A");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /t/:token/queue rejects a non-YouTube songRef, even calling the API directly", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  const res = await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Not a song", songRef: "this is not a video link" }),
+  });
+  assert.equal(res.status, 400);
+
+  const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
+  assert.equal(state.queued.length, 0);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /t/:token/queue stores the extracted bare video ID, not the full pasted URL", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Song A",
+      songRef: "https://www.youtube.com/watch?v=aaaaaaaaaaa",
+    }),
+  });
+
+  const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
+  assert.equal(state.queued[0].songRef, "aaaaaaaaaaa");
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
@@ -336,7 +376,7 @@ test("GET /t/:token/state returns nowPlaying in camelCase, matching the enqueue 
   await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+    body: JSON.stringify({ title: "Song A", songRef: "aaaaaaaaaaa" }),
   });
   // advance() has no HTTP route yet (future KR) — call the engine directly
   // to move the entry into 'playing', matching how a future player-page
@@ -347,7 +387,7 @@ test("GET /t/:token/state returns nowPlaying in camelCase, matching the enqueue 
   const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
   assert.equal(state.nowPlaying.songTitle, "Song A");
   assert.equal(state.nowPlaying.tableId, tableId);
-  assert.equal(state.nowPlaying.songRef, "yt:aaa");
+  assert.equal(state.nowPlaying.songRef, "aaaaaaaaaaa");
   // confirm no snake_case leakage
   assert.equal(state.nowPlaying.song_title, undefined);
 
@@ -363,12 +403,12 @@ test("POST /t/:token/queue rejects a second active request with 409", async () =
   await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+    body: JSON.stringify({ title: "Song A", songRef: "aaaaaaaaaaa" }),
   });
   const secondRes = await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "Song B", songRef: "yt:bbb" }),
+    body: JSON.stringify({ title: "Song B", songRef: "bbbbbbbbbbb" }),
   });
   assert.equal(secondRes.status, 409);
 
@@ -388,7 +428,7 @@ test("DELETE /t/:token/queue/:entryId cancels the table's own entry", async () =
     await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+      body: JSON.stringify({ title: "Song A", songRef: "aaaaaaaaaaa" }),
     })
   ).json();
 
@@ -415,7 +455,7 @@ test("a table's token cannot cancel a different table's entry (impersonation)", 
     await fetch(`http://127.0.0.1:${port}/t/${tableA.token}/queue`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "A's Song", songRef: "yt:a" }),
+      body: JSON.stringify({ title: "A's Song", songRef: "aaaaaaaaaaa" }),
     })
   ).json();
 
@@ -445,7 +485,7 @@ test("one table already having an active entry does not block a different table'
   await fetch(`http://127.0.0.1:${port}/t/${tableA.token}/queue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "A's Song", songRef: "yt:a" }),
+    body: JSON.stringify({ title: "A's Song", songRef: "aaaaaaaaaaa" }),
   });
 
   // Table B enqueues independently — the one-active-entry rule must be
@@ -453,7 +493,7 @@ test("one table already having an active entry does not block a different table'
   const bRes = await fetch(`http://127.0.0.1:${port}/t/${tableB.token}/queue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "B's Song", songRef: "yt:b" }),
+    body: JSON.stringify({ title: "B's Song", songRef: "bbbbbbbbbbb" }),
   });
   assert.equal(bRes.status, 201);
 
@@ -496,7 +536,7 @@ test("POST /player/:token/advance promotes a queued request, GET .../state refle
   await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+    body: JSON.stringify({ title: "Song A", songRef: "aaaaaaaaaaa" }),
   });
 
   const advanceRes = await fetch(`http://127.0.0.1:${port}/player/${playerToken}/advance`, {
@@ -525,7 +565,7 @@ test("a second advance with nothing behind it marks the entry done and returns e
   await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+    body: JSON.stringify({ title: "Song A", songRef: "aaaaaaaaaaa" }),
   });
 
   await fetch(`http://127.0.0.1:${port}/player/${playerToken}/advance`, { method: "POST" });
@@ -580,6 +620,109 @@ test("GET /player/:token 404s for an unknown token", async () => {
 
   const res = await fetch(`http://127.0.0.1:${port}/player/nope`);
   assert.equal(res.status, 404);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+async function addPlaylistTrack(port, venueId, title, songRef) {
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${venueId}/playlist-tracks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, songRef }),
+  });
+  return { status: res.status, body: await res.json() };
+}
+
+test("playlist tracks are appended at increasing positions starting from 0", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const first = await addPlaylistTrack(port, VENUE, "Ambient 1", "aaaaaaaaaaa");
+  const second = await addPlaylistTrack(port, VENUE, "Ambient 2", "bbbbbbbbbbb");
+
+  assert.equal(first.body.position, 0);
+  assert.equal(second.body.position, 1);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("adding a playlist track rejects an invalid songRef", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const result = await addPlaylistTrack(port, VENUE, "Bad", "not a link");
+  assert.equal(result.status, 400);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET playlist-tracks lists in position order", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  await addPlaylistTrack(port, VENUE, "Ambient 1", "aaaaaaaaaaa");
+  await addPlaylistTrack(port, VENUE, "Ambient 2", "bbbbbbbbbbb");
+
+  const list = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/playlist-tracks`)
+  ).json();
+  assert.equal(list.length, 2);
+  assert.equal(list[0].title, "Ambient 1");
+  assert.equal(list[1].title, "Ambient 2");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("DELETE playlist-tracks removes only the targeted venue's track", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const { body: track } = await addPlaylistTrack(port, VENUE, "Ambient 1", "aaaaaaaaaaa");
+
+  // A different venue's URL cannot delete this track.
+  const wrongVenueRes = await fetch(
+    `http://127.0.0.1:${port}/admin/venues/other-venue/playlist-tracks/${track.id}`,
+    { method: "DELETE" },
+  );
+  const wrongVenueBody = await wrongVenueRes.json();
+  assert.equal(wrongVenueBody.deleted, false);
+
+  const stillThere = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/playlist-tracks`)
+  ).json();
+  assert.equal(stillThere.length, 1);
+
+  const correctRes = await fetch(
+    `http://127.0.0.1:${port}/admin/venues/${VENUE}/playlist-tracks/${track.id}`,
+    { method: "DELETE" },
+  );
+  const correctBody = await correctRes.json();
+  assert.equal(correctBody.deleted, true);
+
+  const afterDelete = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/playlist-tracks`)
+  ).json();
+  assert.equal(afterDelete.length, 0);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("advance() correctly reads playlist tracks created through the new routes (not just hand-seeded rows)", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  await addPlaylistTrack(port, VENUE, "Ambient 1", "aaaaaaaaaaa");
+  await addPlaylistTrack(port, VENUE, "Ambient 2", "bbbbbbbbbbb");
+
+  const { advance } = await import("../src/queueEngine.js");
+  const result = advance(db, VENUE);
+  assert.equal(result.type, "playlist");
+  assert.equal(result.track.title, "Ambient 1");
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
