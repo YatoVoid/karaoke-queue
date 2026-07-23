@@ -50,6 +50,17 @@
   }
   button.small { padding: 6px 10px; font-size: 0.85rem; }
   code { background: #0b0d11; padding: 3px 6px; border-radius: 6px; font-size: 0.85rem; }
+  .hint { font-size: 0.85rem; color: #9aa3b2; min-height: 1.2em; margin: 0; }
+  .hint.error { color: #ff6e6e; }
+  #playlist-rows li {
+    background: #0b0d11;
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+  }
 </style>
 </head>
 <body>
@@ -96,7 +107,31 @@
     <p id="player-url" hidden></p>
   </div>
 
+  <h2>Background playlist</h2>
+  <div class="panel">
+    <ol id="playlist-rows" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;"></ol>
+    <p id="no-playlist-tracks" hidden style="color:#6b7280;">No playlist tracks yet — the queue falls back to silence when empty.</p>
+  </div>
+
+  <h2>Add a playlist track</h2>
+  <div class="panel">
+    <form id="playlist-form">
+      <div class="field">
+        <label>Title</label>
+        <input type="text" id="playlist-title-input" placeholder="Ambient track" required />
+      </div>
+      <div class="field">
+        <label>YouTube link or video ID</label>
+        <input type="text" id="playlist-song-input" placeholder="https://www.youtube.com/watch?v=..." required />
+        <p class="hint" id="playlist-input-hint"></p>
+      </div>
+      <button type="submit">Add track</button>
+    </form>
+  </div>
+
   <script type="module">
+    import { extractVideoId } from "/youtube.js";
+
     const venueId = location.pathname.split("/").filter(Boolean)[2];
     document.getElementById("venue-label").textContent = venueId;
 
@@ -109,6 +144,12 @@
     const priceInputEl = document.getElementById("price-input");
     const createPlayerButtonEl = document.getElementById("create-player-button");
     const playerUrlEl = document.getElementById("player-url");
+    const playlistRowsEl = document.getElementById("playlist-rows");
+    const noPlaylistTracksEl = document.getElementById("no-playlist-tracks");
+    const playlistFormEl = document.getElementById("playlist-form");
+    const playlistTitleInputEl = document.getElementById("playlist-title-input");
+    const playlistSongInputEl = document.getElementById("playlist-song-input");
+    const playlistHintEl = document.getElementById("playlist-input-hint");
 
     function escapeHtml(str) {
       const div = document.createElement("div");
@@ -177,7 +218,68 @@
       playerUrlEl.hidden = false;
     });
 
+    async function loadPlaylist() {
+      const res = await fetch(`/admin/venues/${venueId}/playlist-tracks`);
+      const tracks = await res.json();
+
+      playlistRowsEl.innerHTML = "";
+      noPlaylistTracksEl.hidden = tracks.length > 0;
+
+      tracks.forEach((track) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<span>${escapeHtml(track.title)}</span><button class="small" data-remove-track-id="${track.id}">Remove</button>`;
+        playlistRowsEl.appendChild(li);
+      });
+
+      playlistRowsEl.querySelectorAll("[data-remove-track-id]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const trackId = btn.dataset.removeTrackId;
+          await fetch(`/admin/venues/${venueId}/playlist-tracks/${trackId}`, { method: "DELETE" });
+          await loadPlaylist();
+        });
+      });
+    }
+
+    playlistSongInputEl.addEventListener("input", () => {
+      if (!playlistSongInputEl.value.trim()) {
+        playlistHintEl.textContent = "";
+        playlistHintEl.classList.remove("error");
+        return;
+      }
+      if (extractVideoId(playlistSongInputEl.value)) {
+        playlistHintEl.textContent = "Looks good.";
+        playlistHintEl.classList.remove("error");
+      } else {
+        playlistHintEl.textContent = "Doesn't look like a YouTube link or video ID.";
+        playlistHintEl.classList.add("error");
+      }
+    });
+
+    playlistFormEl.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const title = playlistTitleInputEl.value.trim();
+      const videoId = extractVideoId(playlistSongInputEl.value);
+      if (!videoId) {
+        playlistHintEl.textContent = "Doesn't look like a YouTube link or video ID.";
+        playlistHintEl.classList.add("error");
+        return;
+      }
+
+      await fetch(`/admin/venues/${venueId}/playlist-tracks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, songRef: videoId }),
+      });
+
+      playlistTitleInputEl.value = "";
+      playlistSongInputEl.value = "";
+      playlistHintEl.textContent = "";
+      playlistHintEl.classList.remove("error");
+      await loadPlaylist();
+    });
+
     loadTables();
+    loadPlaylist();
   </script>
 </body>
 </html>
