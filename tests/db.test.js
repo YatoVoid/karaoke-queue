@@ -12,6 +12,7 @@ test("openDatabase creates all expected tables", () => {
   assert.deepEqual(rows, [
     "background_playlist_tracks",
     "pairing_tokens",
+    "player_tokens",
     "queue_entries",
     "tables",
     "venue_playlist_state",

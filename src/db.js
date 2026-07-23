@@ -46,6 +46,12 @@ CREATE TABLE IF NOT EXISTS pairing_tokens (
   table_id TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS player_tokens (
+  token TEXT PRIMARY KEY,
+  venue_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 `;
 
 export function openDatabase(path = ":memory:") {

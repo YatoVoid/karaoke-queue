@@ -367,3 +367,98 @@ test("one table already having an active entry does not block a different table'
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
+
+async function createPlayerToken(port) {
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/player-token`, {
+    method: "POST",
+  });
+  return (await res.json()).token;
+}
+
+test("POST /player/:token/advance with nothing queued returns empty", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const playerToken = await createPlayerToken(port);
+
+  const res = await fetch(`http://127.0.0.1:${port}/player/${playerToken}/advance`, {
+    method: "POST",
+  });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.type, "empty");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /player/:token/advance promotes a queued request, GET .../state reflects it", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const playerToken = await createPlayerToken(port);
+  const { token } = await createAndPairTable(port);
+
+  await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+  });
+
+  const advanceRes = await fetch(`http://127.0.0.1:${port}/player/${playerToken}/advance`, {
+    method: "POST",
+  });
+  const advanceBody = await advanceRes.json();
+  assert.equal(advanceBody.type, "request");
+  assert.equal(advanceBody.entry.songTitle, "Song A");
+  assert.equal(advanceBody.entry.status, "playing");
+
+  const state = await (
+    await fetch(`http://127.0.0.1:${port}/player/${playerToken}/state`)
+  ).json();
+  assert.equal(state.nowPlaying.songTitle, "Song A");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("a second advance with nothing behind it marks the entry done and returns empty", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const playerToken = await createPlayerToken(port);
+  const { token } = await createAndPairTable(port);
+
+  await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+  });
+
+  await fetch(`http://127.0.0.1:${port}/player/${playerToken}/advance`, { method: "POST" });
+  const secondRes = await fetch(`http://127.0.0.1:${port}/player/${playerToken}/advance`, {
+    method: "POST",
+  });
+  const secondBody = await secondRes.json();
+  assert.equal(secondBody.type, "empty");
+
+  const state = await (
+    await fetch(`http://127.0.0.1:${port}/player/${playerToken}/state`)
+  ).json();
+  assert.equal(state.nowPlaying, null);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("player routes 404 for an unknown token", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const advanceRes = await fetch(`http://127.0.0.1:${port}/player/nope/advance`, {
+    method: "POST",
+  });
+  const stateRes = await fetch(`http://127.0.0.1:${port}/player/nope/state`);
+  assert.equal(advanceRes.status, 404);
+  assert.equal(stateRes.status, 404);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});

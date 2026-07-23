@@ -4,8 +4,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { WebSocketServer } from "ws";
-import { nowPlaying, enqueue, cancel, TableAlreadyQueuedError } from "./queueEngine.js";
+import { nowPlaying, enqueue, cancel, advance, TableAlreadyQueuedError } from "./queueEngine.js";
 import { createPairing, resolveToken } from "./pairing.js";
+import { createPlayerPairing, resolvePlayerToken } from "./playerPairing.js";
 import { Router } from "./router.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -124,6 +125,11 @@ function buildRouter(db, getWss) {
     },
   );
 
+  router.add("POST", "/admin/venues/:venueId/player-token", async (req, res, params) => {
+    const token = createPlayerPairing(db, params.venueId);
+    sendJson(res, 201, { token, url: `/player/${token}` });
+  });
+
   router.add("GET", "/youtube.js", async (req, res) => {
     res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" });
     res.end(YOUTUBE_JS);
@@ -205,6 +211,29 @@ function buildRouter(db, getWss) {
       broadcastToClients(getWss(), db, resolved.venueId);
     }
     sendJson(res, 200, { cancelled });
+  });
+
+  router.add("GET", "/player/:token/state", async (req, res, params) => {
+    const resolved = resolvePlayerToken(db, params.token);
+    if (!resolved) {
+      return sendJson(res, 404, { error: "unknown player" });
+    }
+    sendJson(res, 200, queueStatePayload(db, resolved.venueId));
+  });
+
+  router.add("POST", "/player/:token/advance", async (req, res, params) => {
+    const resolved = resolvePlayerToken(db, params.token);
+    if (!resolved) {
+      return sendJson(res, 404, { error: "unknown player" });
+    }
+
+    const result = advance(db, resolved.venueId);
+    broadcastToClients(getWss(), db, resolved.venueId);
+
+    if (result.type === "request") {
+      return sendJson(res, 200, { type: "request", entry: toApiEntry(result.entry) });
+    }
+    sendJson(res, 200, result);
   });
 
   return router;
