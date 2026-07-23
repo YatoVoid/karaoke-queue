@@ -40,6 +40,12 @@ CREATE TABLE IF NOT EXISTS venue_playlist_state (
   venue_id TEXT PRIMARY KEY,
   cursor INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS pairing_tokens (
+  token TEXT PRIMARY KEY,
+  table_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 `;
 
 export function openDatabase(path = ":memory:") {
