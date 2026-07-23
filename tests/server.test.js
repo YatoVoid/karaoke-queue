@@ -270,3 +270,62 @@ test("DELETE /t/:token/queue/:entryId cancels the table's own entry", async () =
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
+
+test("a table's token cannot cancel a different table's entry (impersonation)", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const tableA = await createAndPairTable(port, "Table A");
+  const tableB = await createAndPairTable(port, "Table B");
+
+  const entryA = await (
+    await fetch(`http://127.0.0.1:${port}/t/${tableA.token}/queue`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "A's Song", songRef: "yt:a" }),
+    })
+  ).json();
+
+  // Table B tries to cancel table A's entry using its OWN token.
+  const cancelRes = await fetch(
+    `http://127.0.0.1:${port}/t/${tableB.token}/queue/${entryA.id}`,
+    { method: "DELETE" },
+  );
+  const cancelBody = await cancelRes.json();
+  assert.equal(cancelBody.cancelled, false);
+
+  // A's entry must still be queued — not silently cancelled by B.
+  const stateA = await (await fetch(`http://127.0.0.1:${port}/t/${tableA.token}/state`)).json();
+  assert.equal(stateA.queued.length, 1);
+  assert.equal(stateA.queued[0].id, entryA.id);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("one table already having an active entry does not block a different table's enqueue", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const tableA = await createAndPairTable(port, "Table A");
+  const tableB = await createAndPairTable(port, "Table B");
+
+  await fetch(`http://127.0.0.1:${port}/t/${tableA.token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "A's Song", songRef: "yt:a" }),
+  });
+
+  // Table B enqueues independently — the one-active-entry rule must be
+  // scoped per-table, not accidentally global across the whole venue.
+  const bRes = await fetch(`http://127.0.0.1:${port}/t/${tableB.token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "B's Song", songRef: "yt:b" }),
+  });
+  assert.equal(bRes.status, 201);
+
+  const stateB = await (await fetch(`http://127.0.0.1:${port}/t/${tableB.token}/state`)).json();
+  assert.equal(stateB.queued.length, 2); // both A's and B's entries are venue-wide visible
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
