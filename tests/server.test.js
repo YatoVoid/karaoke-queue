@@ -296,6 +296,90 @@ test("PATCH /admin/.../tables/:tableId 404s for an unknown tableId", async () =>
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
 
+test("DELETE /admin/.../tables/:tableId removes the table and reports deleted:true", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const created = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "Table 7", kind: "public" }),
+    })
+  ).json();
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables/${created.id}`, {
+    method: "DELETE",
+  });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.deleted, true);
+
+  const row = db.prepare("SELECT * FROM tables WHERE id = ?").get(created.id);
+  assert.equal(row, undefined);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("DELETE /admin/.../tables/:tableId reports deleted:false for an unknown tableId", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(
+    `http://127.0.0.1:${port}/admin/venues/${VENUE}/tables/does-not-exist`,
+    { method: "DELETE" },
+  );
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.deleted, false);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("DELETE /admin/.../tables/:tableId invalidates its pairing token and cancels its queued entry, without affecting another table", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const { tableId, token } = await createAndPairTable(port, "Doomed Table", "public", 2);
+  const other = await createAndPairTable(port, "Other Table", "public", 2);
+
+  await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Doomed Song", songRef: "jNQXAC9IVRw" }),
+  });
+  const otherEntryRes = await fetch(`http://127.0.0.1:${port}/t/${other.token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Safe Song", songRef: "dQw4w9WgXcQ" }),
+  });
+  const otherEntry = await otherEntryRes.json();
+
+  const deleteRes = await fetch(
+    `http://127.0.0.1:${port}/admin/venues/${VENUE}/tables/${tableId}`,
+    { method: "DELETE" },
+  );
+  assert.equal((await deleteRes.json()).deleted, true);
+
+  // The deleted table's own paired URL must stop resolving.
+  const staleRes = await fetch(`http://127.0.0.1:${port}/t/${token}`);
+  assert.equal(staleRes.status, 404);
+
+  // Its queued entry must no longer be live in the venue's queue.
+  const state = await (
+    await fetch(`http://127.0.0.1:${port}/t/${other.token}/state`)
+  ).json();
+  assert.ok(!state.queued.some((e) => e.tableId === tableId));
+
+  // The OTHER table's own queued entry must be untouched (isolation).
+  assert.ok(state.queued.some((e) => e.id === otherEntry.id && e.status === "queued"));
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
 test("GET /admin/venues/:venueId/tables lists tables with pairing status", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });

@@ -200,7 +200,7 @@
         const pairingCell = t.pairingUrl
           ? `<code>${escapeHtml(t.pairingUrl)}</code>`
           : `<button class="small" data-pair-table-id="${t.id}">Pair</button>`;
-        tr.innerHTML = `<td>${escapeHtml(t.label)}</td><td>${t.kind}</td><td>${priceText}</td><td>${pairingCell}</td><td><button class="small" data-edit-table-id="${t.id}" data-label="${escapeHtml(t.label)}" data-kind="${t.kind}" data-price="${t.pricePerUse}">Edit</button></td>`;
+        tr.innerHTML = `<td>${escapeHtml(t.label)}</td><td>${t.kind}</td><td>${priceText}</td><td>${pairingCell}</td><td><button class="small" data-edit-table-id="${t.id}" data-label="${escapeHtml(t.label)}" data-kind="${t.kind}" data-price="${t.pricePerUse}">Edit</button> <button class="small" data-delete-table-id="${t.id}" data-label="${escapeHtml(t.label)}">Delete</button></td>`;
         tableRowsEl.appendChild(tr);
       });
 
@@ -240,6 +240,22 @@
             return;
           }
 
+          await loadTables();
+        });
+      });
+
+      tableRowsEl.querySelectorAll("[data-delete-table-id]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const tableId = btn.dataset.deleteTableId;
+          if (!window.confirm(`Delete "${btn.dataset.label}"? This cannot be undone.`)) return;
+
+          tableListErrorEl.hidden = true;
+          const res = await fetch(`/admin/venues/${venueId}/tables/${tableId}`, { method: "DELETE" });
+          if (!res.ok) {
+            tableListErrorEl.textContent = "Something went wrong — try again.";
+            tableListErrorEl.hidden = false;
+            return;
+          }
           await loadTables();
         });
       });

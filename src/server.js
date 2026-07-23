@@ -168,6 +168,28 @@ function buildRouter(db, getWss) {
     sendJson(res, 200, { id: params.tableId, venueId: params.venueId, label, kind, pricePerUse: finalPrice });
   });
 
+  router.add("DELETE", "/admin/venues/:venueId/tables/:tableId", async (req, res, params) => {
+    const result = db
+      .prepare("DELETE FROM tables WHERE id = ? AND venue_id = ?")
+      .run(params.tableId, params.venueId);
+
+    // Neither pairing_tokens nor queue_entries has a DB-level foreign
+    // key / cascade to tables (see src/db.js — no FOREIGN KEY declared
+    // anywhere in this schema), so a deleted table's own rows in both
+    // would otherwise linger forever: an orphaned pairing token that
+    // still resolves, and a 'queued' entry with no table left to ever
+    // cancel or claim it.
+    db.prepare("DELETE FROM pairing_tokens WHERE table_id = ?").run(params.tableId);
+    db.prepare(
+      "UPDATE queue_entries SET status = 'cancelled' WHERE table_id = ? AND status = 'queued'",
+    ).run(params.tableId);
+
+    if (result.changes > 0) {
+      broadcastToClients(getWss(), db, params.venueId);
+    }
+    sendJson(res, 200, { deleted: result.changes > 0 });
+  });
+
   router.add("GET", "/admin/venues/:venueId/tables", async (req, res, params) => {
     const rows = db
       .prepare(
