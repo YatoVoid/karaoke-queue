@@ -367,6 +367,30 @@ test("POST /t/:token/queue stores the extracted bare video ID, not the full past
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
 
+// Real network call to the real oEmbed endpoint — matches this project's
+// established precedent (KR4/KR11 Task 1) of verifying real
+// YouTube-dependent behavior rather than mocking it.
+test("POST /t/:token/queue uses the real YouTube title over a wrong client-supplied one", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "this is not the real title",
+      songRef: "jNQXAC9IVRw", // "Me at the zoo"
+    }),
+  });
+
+  const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
+  assert.equal(state.queued[0].songTitle, "Me at the zoo");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
 test("GET /t/:token/state returns nowPlaying in camelCase, matching the enqueue response shape", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });
@@ -632,6 +656,22 @@ async function addPlaylistTrack(port, venueId, title, songRef) {
   });
   return { status: res.status, body: await res.json() };
 }
+
+test("adding a playlist track uses the real YouTube title over a wrong client-supplied one", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const result = await addPlaylistTrack(
+    port,
+    VENUE,
+    "this is not the real title",
+    "jNQXAC9IVRw",
+  );
+  assert.equal(result.body.title, "Me at the zoo");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
 
 test("playlist tracks are appended at increasing positions starting from 0", async () => {
   const db = openDatabase();

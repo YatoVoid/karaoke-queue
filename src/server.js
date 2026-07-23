@@ -8,7 +8,7 @@ import { nowPlaying, enqueue, cancel, advance, TableAlreadyQueuedError } from ".
 import { createPairing, resolveToken } from "./pairing.js";
 import { createPlayerPairing, resolvePlayerToken } from "./playerPairing.js";
 import { Router } from "./router.js";
-import { extractVideoId } from "./youtube.js";
+import { extractVideoId, fetchOembedTitle } from "./youtube.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TABLE_HTML = readFileSync(path.join(__dirname, "..", "public", "table.html"), "utf8");
@@ -175,6 +175,8 @@ function buildRouter(db, getWss) {
     if (!videoId) {
       return sendJson(res, 400, { error: "songRef must be a valid YouTube link or video ID" });
     }
+    const realTitle = await fetchOembedTitle(videoId);
+    const finalTitle = realTitle ?? title;
 
     const { nextPosition } = db
       .prepare(
@@ -185,9 +187,9 @@ function buildRouter(db, getWss) {
     const id = randomUUID();
     db.prepare(
       "INSERT INTO background_playlist_tracks (id, venue_id, position, title, song_ref) VALUES (?, ?, ?, ?, ?)",
-    ).run(id, params.venueId, nextPosition, title, videoId);
+    ).run(id, params.venueId, nextPosition, finalTitle, videoId);
 
-    sendJson(res, 201, { id, position: nextPosition, title, songRef: videoId });
+    sendJson(res, 201, { id, position: nextPosition, title: finalTitle, songRef: videoId });
   });
 
   router.add(
@@ -275,6 +277,10 @@ function buildRouter(db, getWss) {
     if (!videoId) {
       return sendJson(res, 400, { error: "songRef must be a valid YouTube link or video ID" });
     }
+    // Best-effort real title via YouTube's official oEmbed endpoint — any
+    // failure (bad ID, network issue, timeout) falls back to whatever
+    // the requester typed, never blocking the request itself.
+    const realTitle = await fetchOembedTitle(videoId);
 
     let entry;
     try {
@@ -284,7 +290,7 @@ function buildRouter(db, getWss) {
       entry = enqueue(db, {
         venueId: resolved.venueId,
         tableId: resolved.tableId,
-        songTitle: title,
+        songTitle: realTitle ?? title,
         songRef: videoId,
       });
     } catch (err) {
