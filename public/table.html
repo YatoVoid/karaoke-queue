@@ -108,7 +108,7 @@
   <p id="empty-queue" hidden>No one is waiting in line.</p>
 
   <div id="mine-panel" hidden>
-    <p>Your song is in the queue.</p>
+    <p id="mine-status-text">Your song is in the queue.</p>
     <button class="cancel" id="cancel-button">Cancel my request</button>
   </div>
 
@@ -138,6 +138,7 @@
     const inputEl = document.getElementById("song-input");
     const hintEl = document.getElementById("input-hint");
     const cancelButtonEl = document.getElementById("cancel-button");
+    const mineStatusTextEl = document.getElementById("mine-status-text");
 
     let myTableId = null;
     let myPricePerUse = null;
@@ -173,7 +174,14 @@
         : `<span class="empty">Nothing playing right now.</span>`;
 
       queueListEl.innerHTML = "";
-      const mine = state.queued.find((e) => e.tableId === myTableId);
+      // "mine" must also match a request that's been promoted to
+      // 'playing' — once the player advances it, it's removed from
+      // state.queued entirely (queuedList only returns status='queued'
+      // rows), so checking queued alone would wrongly show the request
+      // form again while this table's own song is the one playing.
+      const mine =
+        state.queued.find((e) => e.tableId === myTableId) ??
+        (state.nowPlaying?.tableId === myTableId ? state.nowPlaying : null);
 
       if (state.queued.length === 0) {
         emptyQueueEl.hidden = false;
@@ -190,7 +198,17 @@
       if (mine) {
         minePanelEl.hidden = false;
         formEl.hidden = true;
-        cancelButtonEl.dataset.entryId = mine.id;
+        if (mine.status === "playing") {
+          mineStatusTextEl.textContent = "Your song is playing now!";
+          // cancel() only ever removes status='queued' rows (KR1) — a
+          // cancel attempt on a playing entry would silently do
+          // nothing, so don't offer a button that wouldn't work.
+          cancelButtonEl.hidden = true;
+        } else {
+          mineStatusTextEl.textContent = "Your song is in the queue.";
+          cancelButtonEl.hidden = false;
+          cancelButtonEl.dataset.entryId = mine.id;
+        }
       } else {
         minePanelEl.hidden = true;
         formEl.hidden = false;
