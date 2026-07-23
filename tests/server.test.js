@@ -177,6 +177,125 @@ test("POST /admin/.../tables rejects a negative pricePerUse", async () => {
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
 
+test("PATCH /admin/.../tables/:tableId edits label, kind, and price", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const created = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "Table 7", kind: "public", pricePerUse: 1 }),
+    })
+  ).json();
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables/${created.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label: "Table Seven", kind: "public", pricePerUse: 5 }),
+  });
+  const body = await res.json();
+
+  assert.equal(res.status, 200);
+  assert.equal(body.label, "Table Seven");
+  assert.equal(body.pricePerUse, 5);
+
+  const row = db.prepare("SELECT label, price_per_use FROM tables WHERE id = ?").get(created.id);
+  assert.equal(row.label, "Table Seven");
+  assert.equal(row.price_per_use, 5);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("PATCH /admin/.../tables/:tableId forces price to 0 when switched to private", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const created = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "Table 7", kind: "public", pricePerUse: 4 }),
+    })
+  ).json();
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables/${created.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label: "Table 7", kind: "private", pricePerUse: 4 }),
+  });
+  const body = await res.json();
+
+  assert.equal(body.pricePerUse, 0);
+  const row = db.prepare("SELECT price_per_use FROM tables WHERE id = ?").get(created.id);
+  assert.equal(row.price_per_use, 0);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("PATCH /admin/.../tables/:tableId rejects an invalid kind", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const created = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "Table 7", kind: "public" }),
+    })
+  ).json();
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables/${created.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label: "Table 7", kind: "vip-lounge" }),
+  });
+  assert.equal(res.status, 400);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("PATCH /admin/.../tables/:tableId rejects a negative pricePerUse", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const created = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "Table 7", kind: "public" }),
+    })
+  ).json();
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables/${created.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label: "Table 7", kind: "public", pricePerUse: -3 }),
+  });
+  assert.equal(res.status, 400);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("PATCH /admin/.../tables/:tableId 404s for an unknown tableId", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables/does-not-exist`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label: "Table 7", kind: "public" }),
+  });
+  assert.equal(res.status, 404);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
 test("GET /admin/venues/:venueId/tables lists tables with pairing status", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });

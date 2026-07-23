@@ -82,6 +82,26 @@ function queueStatePayload(db, venueId) {
 
 const VALID_TABLE_KINDS = new Set(["public", "private"]);
 
+// Shared by table creation (POST) and editing (PATCH) so the two routes
+// can never drift apart on what counts as a valid table — an edit that
+// accepted something creation would reject (or vice versa) would be a
+// real, confusing inconsistency.
+function validateTableInput({ label, kind, pricePerUse }) {
+  if (typeof label !== "string" || !label.trim()) {
+    return "label is required";
+  }
+  if (!VALID_TABLE_KINDS.has(kind)) {
+    return "kind must be 'public' or 'private'";
+  }
+  if (
+    pricePerUse !== undefined &&
+    (typeof pricePerUse !== "number" || !Number.isInteger(pricePerUse) || pricePerUse < 0)
+  ) {
+    return "pricePerUse must be a non-negative integer";
+  }
+  return null;
+}
+
 function buildRouter(db, getWss) {
   const router = new Router();
 
@@ -101,17 +121,9 @@ function buildRouter(db, getWss) {
       return sendJson(res, 400, { error: "invalid JSON body" });
     }
     const { label, kind, pricePerUse } = body;
-    if (typeof label !== "string" || !label.trim()) {
-      return sendJson(res, 400, { error: "label is required" });
-    }
-    if (!VALID_TABLE_KINDS.has(kind)) {
-      return sendJson(res, 400, { error: "kind must be 'public' or 'private'" });
-    }
-    if (
-      pricePerUse !== undefined &&
-      (typeof pricePerUse !== "number" || !Number.isInteger(pricePerUse) || pricePerUse < 0)
-    ) {
-      return sendJson(res, 400, { error: "pricePerUse must be a non-negative integer" });
+    const validationError = validateTableInput({ label, kind, pricePerUse });
+    if (validationError) {
+      return sendJson(res, 400, { error: validationError });
     }
 
     // Private tables are always free per the objective's business model —
@@ -125,6 +137,35 @@ function buildRouter(db, getWss) {
     ).run(id, params.venueId, label, kind, finalPrice, new Date().toISOString());
 
     sendJson(res, 201, { id, venueId: params.venueId, label, kind, pricePerUse: finalPrice });
+  });
+
+  router.add("PATCH", "/admin/venues/:venueId/tables/:tableId", async (req, res, params) => {
+    const existing = db
+      .prepare("SELECT id FROM tables WHERE id = ? AND venue_id = ?")
+      .get(params.tableId, params.venueId);
+    if (!existing) {
+      return sendJson(res, 404, { error: "unknown table" });
+    }
+
+    let body;
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      return sendJson(res, 400, { error: "invalid JSON body" });
+    }
+    const { label, kind, pricePerUse } = body;
+    const validationError = validateTableInput({ label, kind, pricePerUse });
+    if (validationError) {
+      return sendJson(res, 400, { error: validationError });
+    }
+
+    const finalPrice = kind === "private" ? 0 : (pricePerUse ?? 0);
+
+    db.prepare(
+      "UPDATE tables SET label = ?, kind = ?, price_per_use = ? WHERE id = ? AND venue_id = ?",
+    ).run(label, kind, finalPrice, params.tableId, params.venueId);
+
+    sendJson(res, 200, { id: params.tableId, venueId: params.venueId, label, kind, pricePerUse: finalPrice });
   });
 
   router.add("GET", "/admin/venues/:venueId/tables", async (req, res, params) => {

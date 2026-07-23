@@ -70,11 +70,12 @@
   <div class="panel">
     <table>
       <thead>
-        <tr><th>Label</th><th>Kind</th><th>Price</th><th>Pairing</th></tr>
+        <tr><th>Label</th><th>Kind</th><th>Price</th><th>Pairing</th><th>Actions</th></tr>
       </thead>
       <tbody id="table-rows"></tbody>
     </table>
     <p id="no-tables" hidden style="color:#6b7280;">No tables yet.</p>
+    <p class="hint error" id="table-list-error" hidden></p>
   </div>
 
   <h2>Add a table</h2>
@@ -153,6 +154,7 @@
 
     const tableRowsEl = document.getElementById("table-rows");
     const noTablesEl = document.getElementById("no-tables");
+    const tableListErrorEl = document.getElementById("table-list-error");
     const createFormEl = document.getElementById("create-form");
     const tableFormErrorEl = document.getElementById("table-form-error");
     const labelInputEl = document.getElementById("label-input");
@@ -198,7 +200,7 @@
         const pairingCell = t.pairingUrl
           ? `<code>${escapeHtml(t.pairingUrl)}</code>`
           : `<button class="small" data-pair-table-id="${t.id}">Pair</button>`;
-        tr.innerHTML = `<td>${escapeHtml(t.label)}</td><td>${t.kind}</td><td>${priceText}</td><td>${pairingCell}</td>`;
+        tr.innerHTML = `<td>${escapeHtml(t.label)}</td><td>${t.kind}</td><td>${priceText}</td><td>${pairingCell}</td><td><button class="small" data-edit-table-id="${t.id}" data-label="${escapeHtml(t.label)}" data-kind="${t.kind}" data-price="${t.pricePerUse}">Edit</button></td>`;
         tableRowsEl.appendChild(tr);
       });
 
@@ -206,6 +208,38 @@
         btn.addEventListener("click", async () => {
           const tableId = btn.dataset.pairTableId;
           await fetch(`/admin/venues/${venueId}/tables/${tableId}/pair`, { method: "POST" });
+          await loadTables();
+        });
+      });
+
+      tableRowsEl.querySelectorAll("[data-edit-table-id]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const tableId = btn.dataset.editTableId;
+          const label = window.prompt("Label:", btn.dataset.label);
+          if (label === null) return;
+          const kind = window.prompt("Kind (public/private):", btn.dataset.kind);
+          if (kind === null) return;
+          let pricePerUse = Number(btn.dataset.price) || 0;
+          if (kind === "public") {
+            const priceInput = window.prompt("Price per use:", btn.dataset.price);
+            if (priceInput === null) return;
+            pricePerUse = Number(priceInput);
+          }
+
+          tableListErrorEl.hidden = true;
+          const res = await fetch(`/admin/venues/${venueId}/tables/${tableId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ label: label.trim(), kind, pricePerUse }),
+          });
+
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            tableListErrorEl.textContent = body.error || "Something went wrong — try again.";
+            tableListErrorEl.hidden = false;
+            return;
+          }
+
           await loadTables();
         });
       });
