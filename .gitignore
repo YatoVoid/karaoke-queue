@@ -4,6 +4,7 @@ dist/
 build/
 *.log
 *.sqlite
+data/
 .env
 .env.local
 .DS_Store

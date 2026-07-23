@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "node src/start.js",
     "test": "node --test"
   },
   "dependencies": {
