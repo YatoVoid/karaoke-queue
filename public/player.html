@@ -7,6 +7,12 @@
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
+  /* Same pitfall as table.html: the [hidden] attribute is only honored
+     via the UA stylesheet at very low specificity, and several elements
+     below have their own ID-selector `display` rules (e.g.
+     #idle-message's `display: flex`) that would otherwise silently win
+     over it. */
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     min-height: 100vh;
@@ -88,9 +94,19 @@
             }
           },
           onStateChange: onPlayerStateChange,
+          // Not every YouTube video allows embedding (uploader-controlled;
+          // confirmed via real testing — some real, valid video IDs
+          // genuinely refuse to embed). Without this, one unembeddable
+          // guest-submitted request would leave the player stuck on a
+          // broken screen forever instead of moving on.
+          onError: onPlayerError,
         },
       });
     };
+
+    async function onPlayerError() {
+      await advance();
+    }
 
     function playVideo(videoId) {
       idleEl.hidden = true;
