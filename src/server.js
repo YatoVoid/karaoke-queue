@@ -94,20 +94,54 @@ function buildRouter(db, getWss) {
     } catch {
       return sendJson(res, 400, { error: "invalid JSON body" });
     }
-    const { label, kind } = body;
+    const { label, kind, pricePerUse } = body;
     if (typeof label !== "string" || !label.trim()) {
       return sendJson(res, 400, { error: "label is required" });
     }
     if (!VALID_TABLE_KINDS.has(kind)) {
       return sendJson(res, 400, { error: "kind must be 'public' or 'private'" });
     }
+    if (
+      pricePerUse !== undefined &&
+      (typeof pricePerUse !== "number" || !Number.isInteger(pricePerUse) || pricePerUse < 0)
+    ) {
+      return sendJson(res, 400, { error: "pricePerUse must be a non-negative integer" });
+    }
+
+    // Private tables are always free per the objective's business model —
+    // enforced here regardless of what the request sends, not left as a
+    // client-side convention the admin form merely happens to follow.
+    const finalPrice = kind === "private" ? 0 : (pricePerUse ?? 0);
 
     const id = randomUUID();
     db.prepare(
-      "INSERT INTO tables (id, venue_id, label, kind, created_at) VALUES (?, ?, ?, ?, ?)",
-    ).run(id, params.venueId, label, kind, new Date().toISOString());
+      "INSERT INTO tables (id, venue_id, label, kind, price_per_use, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(id, params.venueId, label, kind, finalPrice, new Date().toISOString());
 
-    sendJson(res, 201, { id, venueId: params.venueId, label, kind });
+    sendJson(res, 201, { id, venueId: params.venueId, label, kind, pricePerUse: finalPrice });
+  });
+
+  router.add("GET", "/admin/venues/:venueId/tables", async (req, res, params) => {
+    const rows = db
+      .prepare(
+        `SELECT tables.id AS id, tables.label AS label, tables.kind AS kind,
+                tables.price_per_use AS pricePerUse,
+                (SELECT token FROM pairing_tokens WHERE table_id = tables.id ORDER BY created_at DESC LIMIT 1) AS latestToken
+         FROM tables WHERE venue_id = ? ORDER BY tables.created_at ASC`,
+      )
+      .all(params.venueId);
+
+    sendJson(
+      res,
+      200,
+      rows.map((row) => ({
+        id: row.id,
+        label: row.label,
+        kind: row.kind,
+        pricePerUse: row.pricePerUse,
+        pairingUrl: row.latestToken ? `/t/${row.latestToken}` : null,
+      })),
+    );
   });
 
   router.add(
@@ -152,6 +186,7 @@ function buildRouter(db, getWss) {
     sendJson(res, 200, {
       tableId: resolved.tableId,
       kind: resolved.kind,
+      pricePerUse: resolved.pricePerUse,
       ...queueStatePayload(db, resolved.venueId),
     });
   });

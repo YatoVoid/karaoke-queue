@@ -11,7 +11,8 @@ export function createPairing(db, tableId) {
 export function resolveToken(db, token) {
   const row = db
     .prepare(
-      `SELECT tables.id AS tableId, tables.venue_id AS venueId, tables.kind AS kind
+      `SELECT tables.id AS tableId, tables.venue_id AS venueId, tables.kind AS kind,
+              tables.price_per_use AS pricePerUse
        FROM pairing_tokens
        JOIN tables ON tables.id = pairing_tokens.table_id
        WHERE pairing_tokens.token = ?`,

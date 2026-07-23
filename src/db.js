@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS tables (
   label TEXT NOT NULL,
   kind TEXT NOT NULL CHECK(kind IN ('public','private')),
   device_id TEXT,
+  price_per_use INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
 

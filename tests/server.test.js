@@ -22,11 +22,11 @@ function closeAll(httpServer, wss, ws) {
   });
 }
 
-async function createAndPairTable(port, label = "Table 1", kind = "public") {
+async function createAndPairTable(port, label = "Table 1", kind = "public", pricePerUse) {
   const createRes = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ label, kind }),
+    body: JSON.stringify({ label, kind, ...(pricePerUse !== undefined ? { pricePerUse } : {}) }),
   });
   const table = await createRes.json();
 
@@ -119,6 +119,101 @@ test("POST /admin/.../tables rejects an invalid kind", async () => {
     body: JSON.stringify({ label: "Table 7", kind: "vip-lounge" }),
   });
   assert.equal(res.status, 400);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /admin/.../tables accepts and returns pricePerUse for a public table", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label: "Table 7", kind: "public", pricePerUse: 1 }),
+  });
+  const body = await res.json();
+  assert.equal(res.status, 201);
+  assert.equal(body.pricePerUse, 1);
+
+  const row = db.prepare("SELECT price_per_use FROM tables WHERE id = ?").get(body.id);
+  assert.equal(row.price_per_use, 1);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /admin/.../tables forces price to 0 for a private table even if one was sent", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label: "VIP Room", kind: "private", pricePerUse: 5 }),
+  });
+  const body = await res.json();
+  assert.equal(body.pricePerUse, 0);
+
+  const row = db.prepare("SELECT price_per_use FROM tables WHERE id = ?").get(body.id);
+  assert.equal(row.price_per_use, 0);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /admin/.../tables rejects a negative pricePerUse", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label: "Table 7", kind: "public", pricePerUse: -1 }),
+  });
+  assert.equal(res.status, 400);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /admin/venues/:venueId/tables lists tables with pairing status", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const unpaired = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "Unpaired", kind: "public", pricePerUse: 2 }),
+    })
+  ).json();
+
+  const { token: pairedToken } = await createAndPairTable(port, "Paired", "private");
+
+  const listRes = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`);
+  const list = await listRes.json();
+
+  const unpairedRow = list.find((t) => t.id === unpaired.id);
+  assert.equal(unpairedRow.pairingUrl, null);
+  assert.equal(unpairedRow.pricePerUse, 2);
+
+  const pairedRow = list.find((t) => t.label === "Paired");
+  assert.equal(pairedRow.pairingUrl, `/t/${pairedToken}`);
+  assert.equal(pairedRow.pricePerUse, 0);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /t/:token/state includes pricePerUse", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port, "Table 1", "public", 3);
+
+  const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
+  assert.equal(state.pricePerUse, 3);
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });

@@ -22,6 +22,7 @@ test("createPairing then resolveToken returns the right table/venue", () => {
   assert.equal(resolved.tableId, "table-1");
   assert.equal(resolved.venueId, VENUE);
   assert.equal(resolved.kind, "private");
+  assert.equal(resolved.pricePerUse, 0); // defaults to 0 when not specified
 });
 
 test("resolveToken returns null for an unknown token", () => {
