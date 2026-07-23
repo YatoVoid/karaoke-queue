@@ -766,3 +766,77 @@ test("advance() correctly reads playlist tracks created through the new routes (
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
+
+// The objective's real-world context is Azerbaijan; non-ASCII table
+// labels and song titles (Azerbaijani Latin-script special characters,
+// or Cyrillic, widely used/understood there too) are ordinary expected
+// input, never exercised anywhere else in this suite.
+test("table labels with Azerbaijani special characters round-trip exactly", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const label = "Zərif zal";
+  const createRes = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label, kind: "public" }),
+  });
+  const created = await createRes.json();
+  assert.equal(created.label, label);
+
+  const list = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`)
+  ).json();
+  assert.equal(list.find((t) => t.id === created.id).label, label);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("a Cyrillic song title survives the full round trip when oEmbed can't override it", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  const title = "Комбинация — Русский стиль";
+  // A syntactically-valid but nonexistent ID (confirmed to 404 at
+  // oEmbed in KR11's own tests) — isolates that THIS test is checking
+  // client-supplied text survival, not YouTube's own real title winning.
+  await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, songRef: "00000000000" }),
+  });
+
+  const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
+  assert.equal(state.queued[0].songTitle, title);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("a venue id containing Cyrillic characters works correctly in the URL path", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const cyrillicVenue = "venue-рестуран";
+
+  const createRes = await fetch(
+    `http://127.0.0.1:${port}/admin/venues/${encodeURIComponent(cyrillicVenue)}/tables`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "Table 1", kind: "public" }),
+    },
+  );
+  const created = await createRes.json();
+  assert.equal(created.venueId, cyrillicVenue);
+
+  const list = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${encodeURIComponent(cyrillicVenue)}/tables`)
+  ).json();
+  assert.equal(list.length, 1);
+  assert.equal(list[0].id, created.id);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
