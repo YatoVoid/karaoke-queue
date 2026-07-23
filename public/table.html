@@ -112,6 +112,8 @@
     <button class="cancel" id="cancel-button">Cancel my request</button>
   </div>
 
+  <p class="hint" id="price-line" hidden></p>
+
   <form id="request-form">
     <input
       type="text"
@@ -131,12 +133,14 @@
     const queueListEl = document.getElementById("queue-list");
     const emptyQueueEl = document.getElementById("empty-queue");
     const minePanelEl = document.getElementById("mine-panel");
+    const priceLineEl = document.getElementById("price-line");
     const formEl = document.getElementById("request-form");
     const inputEl = document.getElementById("song-input");
     const hintEl = document.getElementById("input-hint");
     const cancelButtonEl = document.getElementById("cancel-button");
 
     let myTableId = null;
+    let myPricePerUse = null;
 
     // No YouTube Data API key is available in this environment (would
     // need the venue operator's own Google Cloud credential), so there is
@@ -158,6 +162,11 @@
       if (state.tableId !== undefined) {
         myTableId = state.tableId;
       }
+      if (state.pricePerUse !== undefined) {
+        myPricePerUse = state.pricePerUse;
+      }
+      priceLineEl.hidden = !(myPricePerUse > 0);
+      priceLineEl.textContent = `This costs ${myPricePerUse} — ask staff to add it to your bill.`;
 
       nowPlayingEl.innerHTML = state.nowPlaying
         ? `<div class="title-row"><img src="${thumbnailUrl(state.nowPlaying.songRef)}" alt="" /><span class="title">${escapeHtml(state.nowPlaying.songTitle)}</span></div>`
