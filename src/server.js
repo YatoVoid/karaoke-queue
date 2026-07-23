@@ -1,8 +1,8 @@
 import { createServer as createHttpServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
-import { nowPlaying } from "./queueEngine.js";
-import { createPairing } from "./pairing.js";
+import { nowPlaying, enqueue, cancel, TableAlreadyQueuedError } from "./queueEngine.js";
+import { createPairing, resolveToken } from "./pairing.js";
 import { Router } from "./router.js";
 
 function sendJson(res, status, body) {
@@ -28,9 +28,45 @@ function readJsonBody(req) {
   });
 }
 
+// Normalizes a raw queue_entries DB row (snake_case columns) to the same
+// camelCase shape enqueue() already returns — API consumers should never
+// see two different field-naming conventions depending on which route
+// they called.
+function toApiEntry(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    tableId: row.table_id,
+    songTitle: row.song_title,
+    songRef: row.song_ref,
+    status: row.status,
+    queuedAt: row.queued_at,
+    startedAt: row.started_at ?? null,
+    endedAt: row.ended_at ?? null,
+  };
+}
+
+function queuedList(db, venueId) {
+  return db
+    .prepare(
+      "SELECT * FROM queue_entries WHERE venue_id = ? AND status = 'queued' ORDER BY queued_at ASC",
+    )
+    .all(venueId)
+    .map(toApiEntry);
+}
+
+function queueStatePayload(db, venueId) {
+  return {
+    venueId,
+    nowPlaying: toApiEntry(nowPlaying(db, venueId)),
+    queued: queuedList(db, venueId),
+  };
+}
+
 const VALID_TABLE_KINDS = new Set(["public", "private"]);
 
-function buildRouter(db) {
+function buildRouter(db, getWss) {
   const router = new Router();
 
   router.add("GET", "/healthz", async (req, res) => {
@@ -76,11 +112,91 @@ function buildRouter(db) {
     },
   );
 
+  router.add("GET", "/t/:token/state", async (req, res, params) => {
+    const resolved = resolveToken(db, params.token);
+    if (!resolved) {
+      return sendJson(res, 404, { error: "unknown table" });
+    }
+    sendJson(res, 200, {
+      tableId: resolved.tableId,
+      kind: resolved.kind,
+      ...queueStatePayload(db, resolved.venueId),
+    });
+  });
+
+  router.add("POST", "/t/:token/queue", async (req, res, params) => {
+    const resolved = resolveToken(db, params.token);
+    if (!resolved) {
+      return sendJson(res, 404, { error: "unknown table" });
+    }
+
+    let body;
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      return sendJson(res, 400, { error: "invalid JSON body" });
+    }
+    const { title, songRef } = body;
+    if (typeof title !== "string" || !title.trim()) {
+      return sendJson(res, 400, { error: "title is required" });
+    }
+    if (typeof songRef !== "string" || !songRef.trim()) {
+      return sendJson(res, 400, { error: "songRef is required" });
+    }
+
+    let entry;
+    try {
+      // Table identity comes ONLY from the resolved token, never from the
+      // request body — this is the actual anti-impersonation enforcement
+      // point for this route.
+      entry = enqueue(db, {
+        venueId: resolved.venueId,
+        tableId: resolved.tableId,
+        songTitle: title,
+        songRef,
+      });
+    } catch (err) {
+      if (err instanceof TableAlreadyQueuedError) {
+        return sendJson(res, 409, { error: "table already has an active request" });
+      }
+      throw err;
+    }
+
+    broadcastToClients(getWss(), db, resolved.venueId);
+    sendJson(res, 201, entry);
+  });
+
+  router.add("DELETE", "/t/:token/queue/:entryId", async (req, res, params) => {
+    const resolved = resolveToken(db, params.token);
+    if (!resolved) {
+      return sendJson(res, 404, { error: "unknown table" });
+    }
+
+    // Same enforcement point: cancel() is called with the RESOLVED
+    // tableId, never a client-supplied one, so a token can only ever
+    // cancel its own table's entries.
+    const cancelled = cancel(db, { tableId: resolved.tableId, entryId: params.entryId });
+    if (cancelled) {
+      broadcastToClients(getWss(), db, resolved.venueId);
+    }
+    sendJson(res, 200, { cancelled });
+  });
+
   return router;
 }
 
+function broadcastToClients(wss, db, venueId) {
+  const message = JSON.stringify({ type: "queue-state", ...queueStatePayload(db, venueId) });
+  for (const client of wss.clients) {
+    if (client.readyState === client.OPEN) {
+      client.send(message);
+    }
+  }
+}
+
 export function createServer({ db }) {
-  const router = buildRouter(db);
+  let wss;
+  const router = buildRouter(db, () => wss);
 
   const httpServer = createHttpServer(async (req, res) => {
     const match = router.match(req.method, req.url);
@@ -94,29 +210,11 @@ export function createServer({ db }) {
     }
   });
 
-  const wss = new WebSocketServer({ server: httpServer });
+  wss = new WebSocketServer({ server: httpServer });
 
   return { httpServer, wss, db };
 }
 
-function queuedList(db, venueId) {
-  return db
-    .prepare(
-      "SELECT * FROM queue_entries WHERE venue_id = ? AND status = 'queued' ORDER BY queued_at ASC",
-    )
-    .all(venueId);
-}
-
 export function broadcastQueueState(wss, db, venueId) {
-  const message = JSON.stringify({
-    type: "queue-state",
-    venueId,
-    nowPlaying: nowPlaying(db, venueId),
-    queued: queuedList(db, venueId),
-  });
-  for (const client of wss.clients) {
-    if (client.readyState === client.OPEN) {
-      client.send(message);
-    }
-  }
+  broadcastToClients(wss, db, venueId);
 }

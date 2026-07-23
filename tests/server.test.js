@@ -22,6 +22,23 @@ function closeAll(httpServer, wss, ws) {
   });
 }
 
+async function createAndPairTable(port, label = "Table 1", kind = "public") {
+  const createRes = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label, kind }),
+  });
+  const table = await createRes.json();
+
+  const pairRes = await fetch(
+    `http://127.0.0.1:${port}/admin/venues/${VENUE}/tables/${table.id}/pair`,
+    { method: "POST" },
+  );
+  const pairing = await pairRes.json();
+
+  return { tableId: table.id, token: pairing.token };
+}
+
 test("GET /healthz returns ok", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });
@@ -141,6 +158,115 @@ test("POST /admin/.../tables/:tableId/pair 404s for an unknown table", async () 
     { method: "POST" },
   );
   assert.equal(res.status, 404);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /t/:token/state returns 404 for an unknown token", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(`http://127.0.0.1:${port}/t/not-a-real-token/state`);
+  assert.equal(res.status, 404);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /t/:token/queue enqueues, and GET /t/:token/state reflects it", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  const enqueueRes = await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+  });
+  assert.equal(enqueueRes.status, 201);
+
+  const stateRes = await fetch(`http://127.0.0.1:${port}/t/${token}/state`);
+  const state = await stateRes.json();
+  assert.equal(state.queued.length, 1);
+  assert.equal(state.queued[0].songTitle, "Song A");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /t/:token/state returns nowPlaying in camelCase, matching the enqueue response shape", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { tableId, token } = await createAndPairTable(port);
+
+  await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+  });
+  // advance() has no HTTP route yet (future KR) — call the engine directly
+  // to move the entry into 'playing', matching how a future player-page
+  // KR will drive this.
+  const { advance } = await import("../src/queueEngine.js");
+  advance(db, VENUE);
+
+  const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
+  assert.equal(state.nowPlaying.songTitle, "Song A");
+  assert.equal(state.nowPlaying.tableId, tableId);
+  assert.equal(state.nowPlaying.songRef, "yt:aaa");
+  // confirm no snake_case leakage
+  assert.equal(state.nowPlaying.song_title, undefined);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /t/:token/queue rejects a second active request with 409", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+  });
+  const secondRes = await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Song B", songRef: "yt:bbb" }),
+  });
+  assert.equal(secondRes.status, 409);
+
+  const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
+  assert.equal(state.queued.length, 1);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("DELETE /t/:token/queue/:entryId cancels the table's own entry", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  const entry = await (
+    await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Song A", songRef: "yt:aaa" }),
+    })
+  ).json();
+
+  const cancelRes = await fetch(`http://127.0.0.1:${port}/t/${token}/queue/${entry.id}`, {
+    method: "DELETE",
+  });
+  const cancelBody = await cancelRes.json();
+  assert.equal(cancelBody.cancelled, true);
+
+  const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
+  assert.equal(state.queued.length, 0);
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
