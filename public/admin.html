@@ -134,7 +134,22 @@
     import { extractVideoId } from "/youtube.js";
 
     const venueId = location.pathname.split("/").filter(Boolean)[2];
-    document.getElementById("venue-label").textContent = venueId;
+    // location.pathname is NOT decoded by the browser (unlike location.href),
+    // so a non-ASCII venue id shows as raw percent-encoded gibberish
+    // ("%D1%80%D0%B5...") if displayed directly. Decode a separate copy
+    // for display only — venueId itself stays exactly as the browser gave
+    // it, since that's what's already correctly used to build every
+    // fetch() URL below (fetch's own URL parser handles it correctly
+    // either way; changing venueId itself is unnecessary and risks
+    // double-encoding if done carelessly).
+    let displayVenueId = venueId;
+    try {
+      displayVenueId = decodeURIComponent(venueId);
+    } catch {
+      // Malformed percent-encoding — fall back to the raw string rather
+      // than crash the page over a cosmetic label.
+    }
+    document.getElementById("venue-label").textContent = displayVenueId;
 
     const tableRowsEl = document.getElementById("table-rows");
     const noTablesEl = document.getElementById("no-tables");
