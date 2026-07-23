@@ -81,6 +81,8 @@ always why — look for that setting and turn it off.
 
 ## Setting up a venue
 
+![Admin page: table list, add-table form, player token button, background playlist](screenshots/admin.png)
+
 1. Start the server (above) and open the printed admin URL
    (`/admin/venues/<your-venue-id>`) from any device on the network.
 2. **Create tables** — a label, `public` (pays a per-use price, shown on
@@ -103,6 +105,8 @@ always why — look for that setting and turn it off.
    That page is the only thing that actually plays audio; leave it
    open and full-screen on that device.
 
+![Player page: current video playing on the left, the "Up next" sidebar on the right](screenshots/player.png)
+
 ## What guests see
 
 Opening a paired `/t/:token` URL shows what's currently playing, the
@@ -113,6 +117,8 @@ again. Everything updates live via WebSocket — no refreshing needed, and
 refreshing doesn't help a table cheat the one-active-request rule either
 way, since that's enforced server-side, not by anything the browser
 remembers.
+
+![Table page: now-playing panel, the live queue with thumbnails, and this table's own "cancel my request" state](screenshots/table.png)
 
 ## Known limitations (honest, not hidden)
 
