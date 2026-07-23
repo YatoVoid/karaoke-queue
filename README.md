@@ -41,6 +41,44 @@ network (a laptop, or a phone acting as a WiFi hotspot) with tablets and
 the output device connecting to that same network — no internet
 connection is required for the system to function.
 
+### Device combinations
+
+"The server" above just means whichever single device runs `npm start`.
+Everything else in this section is a fixed shape: N table tablets + 1
+player device + 1 admin device (which can double as any of the others)
+all joined to the same network as the server. Some real combinations:
+
+- **Testing on one device.** Run the server on a laptop and open
+  `/admin/...`, `/t/...`, and `/player/...` in separate browser tabs on
+  that same laptop. Nothing about the software cares that they're the
+  same machine — this is just the fastest way to try it out.
+- **Real deployment, laptop as host.** A laptop runs the server and
+  stays on all night; each table's tablet has its browser pointed
+  permanently at its own `/t/:token` URL; a separate device (could be
+  the same laptop, or another one plugged into the venue's speakers)
+  stays open on `/player/:token`.
+- **Phone acting as the hotspot AND the server.** If your phone can both
+  create a WiFi hotspot and run this project (e.g. via Termux or
+  similar), it's both roles at once — tablets and the player device
+  join the phone's hotspot and use whatever LAN address it reports on
+  startup.
+- **Phone acting as ONLY the hotspot.** Some setups instead have the
+  phone just providing the WiFi, while a laptop that also joined that
+  same hotspot runs `npm start`. Tablets and the player device still
+  join the phone's hotspot, but the address they connect to is the
+  laptop's IP on that hotspot, not the phone's.
+- **The player device can be anything on the network.** `/player/:token`
+  is just a URL — it doesn't have to run on the same device as the
+  server. Point whatever is actually wired or Bluetooth-connected to the
+  venue's speakers (a TV, a mini PC, another tablet) at that URL.
+
+**One real failure mode worth knowing about:** some routers and phone
+hotspots enable "client isolation" (sometimes called "AP isolation" or
+"guest network" mode) by default, which lets every device reach the
+internet but blocks them from reaching each other. If tablets can join
+the network but can't load the admin/table/player URLs, this is almost
+always why — look for that setting and turn it off.
+
 ## Setting up a venue
 
 1. Start the server (above) and open the printed admin URL
