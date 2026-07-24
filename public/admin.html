@@ -22,8 +22,9 @@
   h2 { font-size: 1rem; color: #9aa3b2; margin: 28px 0 12px; }
   .panel { background: #1a1d24; border-radius: 14px; padding: 18px; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #2a2d36; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 14px 8px; border-bottom: 1px solid #2a2d36; font-size: 0.9rem; }
   th { color: #9aa3b2; font-weight: 600; }
+  code { background: #0b0d11; padding: 3px 6px; border-radius: 6px; font-size: 0.85rem; word-break: break-all; }
   form { display: flex; flex-direction: column; gap: 10px; }
   label { font-size: 0.85rem; color: #9aa3b2; }
   input[type="text"], input[type="number"], select {
@@ -42,24 +43,57 @@
     font-size: 0.95rem;
     font-weight: 700;
     padding: 10px 16px;
+    min-height: 44px;
     border-radius: 8px;
     border: none;
     cursor: pointer;
     background: #6ee7ff;
     color: #062024;
   }
-  button.small { padding: 6px 10px; font-size: 0.85rem; }
-  code { background: #0b0d11; padding: 3px 6px; border-radius: 6px; font-size: 0.85rem; }
+  button.small { padding: 8px 14px; font-size: 0.9rem; min-height: 40px; }
+  .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
   .hint { font-size: 0.85rem; color: #9aa3b2; min-height: 1.2em; margin: 0; }
   .hint.error { color: #ff6e6e; }
   #playlist-rows li {
     background: #0b0d11;
     border-radius: 10px;
-    padding: 10px 12px;
+    padding: 12px 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
     font-size: 0.9rem;
+  }
+
+  /* Phones and iPads: stack each row as a card instead. */
+  @media (max-width: 900px) {
+    .row { flex-direction: column; }
+    table, tbody, tr, td { display: block; width: 100%; }
+    thead { display: none; }
+    tbody tr {
+      background: #0b0d11;
+      border-radius: 12px;
+      padding: 4px 14px;
+      margin-bottom: 12px;
+    }
+    td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #22252c;
+    }
+    td:last-child { border-bottom: none; }
+    td::before {
+      content: attr(data-label);
+      color: #9aa3b2;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    td[data-label="Actions"] { flex-direction: column; align-items: stretch; }
+    td[data-label="Actions"]::before { margin-bottom: 6px; }
+    td[data-label="Actions"] .btn-group button { flex: 1; }
   }
 </style>
 </head>
@@ -211,7 +245,7 @@
         const pairingCell = t.pairingUrl
           ? `<code>${escapeHtml(t.pairingUrl)}</code>`
           : `<button class="small" data-pair-table-id="${t.id}">Pair</button>`;
-        tr.innerHTML = `<td>${escapeHtml(t.label)}</td><td>${t.kind}</td><td>${priceText}</td><td>${billedText}</td><td>${pairingCell}</td><td><button class="small" data-edit-table-id="${t.id}" data-label="${escapeHtml(t.label)}" data-kind="${t.kind}" data-price="${t.pricePerUse}">Edit</button> <button class="small" data-delete-table-id="${t.id}" data-label="${escapeHtml(t.label)}">Delete</button></td>`;
+        tr.innerHTML = `<td data-label="Label">${escapeHtml(t.label)}</td><td data-label="Kind">${t.kind}</td><td data-label="Price">${priceText}</td><td data-label="Billed">${billedText}</td><td data-label="Pairing">${pairingCell}</td><td data-label="Actions"><div class="btn-group"><button class="small" data-edit-table-id="${t.id}" data-label="${escapeHtml(t.label)}" data-kind="${t.kind}" data-price="${t.pricePerUse}">Edit</button><button class="small" data-delete-table-id="${t.id}" data-label="${escapeHtml(t.label)}">Delete</button></div></td>`;
         tableRowsEl.appendChild(tr);
       });
 
