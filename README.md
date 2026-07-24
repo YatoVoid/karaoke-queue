@@ -85,10 +85,15 @@ always why. Look for that setting and turn it off.
 
 1. Start the server (above) and open the printed admin URL
    (`/admin/venues/<your-venue-id>`) from any device on the network.
-2. **Create tables**: a label, `public` (pays a per-use price, shown on
-   the table's own page for staff to add to the bill at checkout) or
-   `private` (always free, e.g. a room already charging a deposit).
-3. **Pair each table**: click "Pair" next to a table, get its
+2. **Set the currency symbol** at the top of the admin page (e.g. `$`,
+   `₼`, `AZN`). It's prefixed on every price shown to guests and staff,
+   so "2" reads as an actual amount instead of a bare number.
+3. **Create tables**: a label, `public` (pays a per-use price) or
+   `private` (always free, e.g. a room already charging a deposit). The
+   admin Tables list also shows a running "Billed" count and total for
+   each table, so staff can read it directly at checkout instead of
+   asking the guest what they played.
+4. **Pair each table**: click "Pair" next to a table, get its
    `/t/:token` URL. Point that specific tablet's browser (ideally kiosk
    mode, or just its bookmarked homepage) at that URL permanently. The
    token is what makes the anti-cheat guarantee work: refreshing the
@@ -96,10 +101,10 @@ always why. Look for that setting and turn it off.
    the same URL, so a table can never gain extra free requests that way,
    and a table's identity can't be spoofed by guessing another table's
    ID (the token is a long random value, not a number).
-4. **Add background playlist tracks**: paste YouTube links/video IDs in
+5. **Add background playlist tracks**: paste YouTube links/video IDs in
    the "Background playlist" section. This plays on a continuous loop
    whenever no table has an active request.
-5. **Create a player token** and open the resulting `/player/:token` URL
+6. **Create a player token** and open the resulting `/player/:token` URL
    on whatever device is connected to the venue's speakers (Bluetooth or
    wired, that connection is the OS's job, outside this software).
    That page is the only thing that actually plays audio; leave it
@@ -120,6 +125,24 @@ remembers.
 
 ![Table page: now-playing panel, the live queue with thumbnails, and this table's own "cancel my request" state](screenshots/table.png)
 
+## Correcting an accidental play
+
+A queued request that hasn't started playing yet can always be
+cancelled for free, no questions asked. Once it starts playing, the
+table's page offers "Skip this song" instead, for the case where the
+wrong video started and the table wants it stopped immediately rather
+than waiting it out:
+
+- Skipping within the first 15 seconds of playback isn't billed. This
+  covers the common accident: the wrong link got queued, it started
+  playing, and the table wants a do-over before they've actually heard
+  anything.
+- Skipping after that still counts as a billable play, since the table
+  got to actually hear the song.
+
+Either way, the venue's player switches to the next item immediately;
+the skipped video never plays out to the end.
+
 ## Known limitations (honest, not hidden)
 
 - **No typed song search.** Finding a song means pasting its YouTube link
@@ -132,9 +155,9 @@ remembers.
   endpoint, a different, credential-free API, so the queue shows the
   actual song title, not the raw link, falling back to the pasted text
   only if that lookup fails.)
-- **No payment processing.** The price shown on a public table's page is
-  for staff to notice and manually add to the bill at checkout. This
-  software has no card/payment integration.
+- **No payment processing.** Pricing and the billed-count tally in admin
+  are informational only, for staff to read at checkout. This software
+  has no card/payment integration and doesn't charge anyone directly.
 - **Public-performance licensing is not addressed.** Playing music (from
   any source, YouTube included) in a commercial venue typically requires
   a PRO license (ASCAP/BMI-style, or a regional equivalent) independent

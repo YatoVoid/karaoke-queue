@@ -143,9 +143,7 @@
       }
     }
 
-    async function advance() {
-      const res = await fetch(`/player/${token}/advance`, { method: "POST" });
-      const result = await res.json();
+    function applyAdvanceResult(result) {
       if (result.type === "request") {
         playVideo(result.entry.songRef);
       } else if (result.type === "playlist") {
@@ -153,6 +151,11 @@
       } else {
         showIdle();
       }
+    }
+
+    async function advance() {
+      const res = await fetch(`/player/${token}/advance`, { method: "POST" });
+      applyAdvanceResult(await res.json());
     }
 
     async function loadInitialState() {
@@ -173,8 +176,11 @@
       ws.addEventListener("message", (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "queue-state") {
-          // Side panel only; playback never reacts to WS pushes.
           renderSideQueue(message.queued);
+          // A table skipped its own now-playing song.
+          if (message.skipTo) {
+            applyAdvanceResult(message.skipTo);
+          }
         }
       });
       ws.addEventListener("close", () => {

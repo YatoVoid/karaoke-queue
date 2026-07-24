@@ -7,6 +7,7 @@ import {
   nowPlaying,
   peekNext,
   advance,
+  skipPlaying,
   TableAlreadyQueuedError,
 } from "../src/queueEngine.js";
 
@@ -136,4 +137,50 @@ test("advance marks the previously playing entry done before promoting the next"
 
   const firstRow = db.prepare("SELECT status FROM queue_entries WHERE id = ?").get(first.id);
   assert.equal(firstRow.status, "done");
+});
+
+test("skipPlaying within the grace window marks the entry cancelled, not billable", () => {
+  const db = freshDb();
+  const entry = enqueue(db, { venueId: VENUE, tableId: "table-1", songTitle: "A", songRef: "yt:a" });
+  advance(db, VENUE);
+
+  const result = skipPlaying(db, { tableId: "table-1", entryId: entry.id, graceMs: 60000 });
+  assert.equal(result.billable, false);
+
+  const row = db.prepare("SELECT status FROM queue_entries WHERE id = ?").get(entry.id);
+  assert.equal(row.status, "cancelled");
+});
+
+test("skipPlaying past the grace window marks the entry done and billable", async () => {
+  const db = freshDb();
+  const entry = enqueue(db, { venueId: VENUE, tableId: "table-1", songTitle: "A", songRef: "yt:a" });
+  advance(db, VENUE);
+  await new Promise((r) => setTimeout(r, 5));
+
+  const result = skipPlaying(db, { tableId: "table-1", entryId: entry.id, graceMs: 1 });
+  assert.equal(result.billable, true);
+
+  const row = db.prepare("SELECT status FROM queue_entries WHERE id = ?").get(entry.id);
+  assert.equal(row.status, "done");
+});
+
+test("skipPlaying returns null for an entry that isn't currently playing", () => {
+  const db = freshDb();
+  const entry = enqueue(db, { venueId: VENUE, tableId: "table-1", songTitle: "A", songRef: "yt:a" });
+
+  // Still queued, never advanced to playing.
+  const result = skipPlaying(db, { tableId: "table-1", entryId: entry.id, graceMs: 60000 });
+  assert.equal(result, null);
+});
+
+test("skipPlaying returns null for a different table's playing entry", () => {
+  const db = freshDb();
+  const entry = enqueue(db, { venueId: VENUE, tableId: "table-1", songTitle: "A", songRef: "yt:a" });
+  advance(db, VENUE);
+
+  const result = skipPlaying(db, { tableId: "table-2", entryId: entry.id, graceMs: 60000 });
+  assert.equal(result, null);
+
+  const row = db.prepare("SELECT status FROM queue_entries WHERE id = ?").get(entry.id);
+  assert.equal(row.status, "playing");
 });

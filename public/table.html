@@ -142,6 +142,7 @@
 
     let myTableId = null;
     let myPricePerUse = null;
+    let myCurrencySymbol = "";
 
     // Static thumbnail, no API key needed.
     function thumbnailUrl(songRef) {
@@ -156,8 +157,11 @@
       if (state.pricePerUse !== undefined) {
         myPricePerUse = state.pricePerUse;
       }
+      if (state.currencySymbol !== undefined) {
+        myCurrencySymbol = state.currencySymbol;
+      }
       priceLineEl.hidden = !(myPricePerUse > 0);
-      priceLineEl.textContent = `This costs ${myPricePerUse}. Ask staff to add it to your bill.`;
+      priceLineEl.textContent = `${myCurrencySymbol}${myPricePerUse} per song, added to your table's bill.`;
 
       nowPlayingEl.innerHTML = state.nowPlaying
         ? `<div class="title-row"><img src="${thumbnailUrl(state.nowPlaying.songRef)}" alt="" /><span class="title">${escapeHtml(state.nowPlaying.songTitle)}</span></div>`
@@ -184,14 +188,16 @@
       if (mine) {
         minePanelEl.hidden = false;
         formEl.hidden = true;
+        cancelButtonEl.hidden = false;
+        cancelButtonEl.dataset.entryId = mine.id;
         if (mine.status === "playing") {
           mineStatusTextEl.textContent = "Your song is playing now!";
-          // cancel() can't touch a playing entry.
-          cancelButtonEl.hidden = true;
+          cancelButtonEl.textContent = "Skip this song";
+          cancelButtonEl.dataset.action = "skip";
         } else {
           mineStatusTextEl.textContent = "Your song is in the queue.";
-          cancelButtonEl.hidden = false;
-          cancelButtonEl.dataset.entryId = mine.id;
+          cancelButtonEl.textContent = "Cancel my request";
+          cancelButtonEl.dataset.action = "cancel";
         }
       } else {
         minePanelEl.hidden = true;
@@ -270,6 +276,14 @@
 
     cancelButtonEl.addEventListener("click", async () => {
       const entryId = cancelButtonEl.dataset.entryId;
+      if (cancelButtonEl.dataset.action === "skip") {
+        const res = await fetch(`/t/${token}/queue/${entryId}/skip`, { method: "POST" });
+        const body = await res.json();
+        mineStatusTextEl.textContent = body.billable
+          ? "Skipped. This still counts toward your bill."
+          : "Skipped. Not charged since you caught it early.";
+        return;
+      }
       await fetch(`/t/${token}/queue/${entryId}`, { method: "DELETE" });
     });
 

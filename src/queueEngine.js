@@ -39,6 +39,27 @@ export function cancel(db, { tableId, entryId }) {
   return result.changes > 0;
 }
 
+// Skipping this fast isn't billed.
+export const SKIP_GRACE_MS = 15000;
+
+export function skipPlaying(db, { tableId, entryId, graceMs = SKIP_GRACE_MS }) {
+  const entry = db
+    .prepare("SELECT * FROM queue_entries WHERE id = ? AND table_id = ? AND status = 'playing'")
+    .get(entryId, tableId);
+  if (!entry) return null;
+
+  const startedAtMs = entry.started_at ? new Date(entry.started_at).getTime() : Date.now();
+  const billable = Date.now() - startedAtMs >= graceMs;
+
+  db.prepare("UPDATE queue_entries SET status = ?, ended_at = ? WHERE id = ?").run(
+    billable ? "done" : "cancelled",
+    new Date().toISOString(),
+    entryId,
+  );
+
+  return { billable };
+}
+
 export function nowPlaying(db, venueId) {
   return (
     db

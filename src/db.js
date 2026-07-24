@@ -4,6 +4,7 @@ const SCHEMA = `
 CREATE TABLE IF NOT EXISTS venues (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
+  currency_symbol TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );
 

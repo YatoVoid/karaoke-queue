@@ -4,7 +4,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { WebSocketServer } from "ws";
-import { nowPlaying, enqueue, cancel, advance, TableAlreadyQueuedError } from "./queueEngine.js";
+import {
+  nowPlaying,
+  enqueue,
+  cancel,
+  advance,
+  skipPlaying,
+  TableAlreadyQueuedError,
+} from "./queueEngine.js";
 import { createPairing, resolveToken } from "./pairing.js";
 import { createPlayerPairing, resolvePlayerToken } from "./playerPairing.js";
 import { Router } from "./router.js";
@@ -67,6 +74,13 @@ function queuedList(db, venueId) {
     )
     .all(venueId)
     .map(toApiEntry);
+}
+
+function normalizeAdvanceResult(result) {
+  if (result.type === "request") {
+    return { type: "request", entry: toApiEntry(result.entry) };
+  }
+  return result;
 }
 
 function queueStatePayload(db, venueId) {
@@ -182,7 +196,8 @@ function buildRouter(db, getWss) {
       .prepare(
         `SELECT tables.id AS id, tables.label AS label, tables.kind AS kind,
                 tables.price_per_use AS pricePerUse,
-                (SELECT token FROM pairing_tokens WHERE table_id = tables.id ORDER BY created_at DESC LIMIT 1) AS latestToken
+                (SELECT token FROM pairing_tokens WHERE table_id = tables.id ORDER BY created_at DESC LIMIT 1) AS latestToken,
+                (SELECT COUNT(*) FROM queue_entries WHERE table_id = tables.id AND status = 'done') AS billableCount
          FROM tables WHERE venue_id = ? ORDER BY tables.created_at ASC`,
       )
       .all(params.venueId);
@@ -196,8 +211,36 @@ function buildRouter(db, getWss) {
         kind: row.kind,
         pricePerUse: row.pricePerUse,
         pairingUrl: row.latestToken ? `/t/${row.latestToken}` : null,
+        billableCount: row.billableCount,
       })),
     );
+  });
+
+  router.add("GET", "/admin/venues/:venueId/currency", async (req, res, params) => {
+    const row = db
+      .prepare("SELECT currency_symbol AS currencySymbol FROM venues WHERE id = ?")
+      .get(params.venueId);
+    sendJson(res, 200, { currencySymbol: row?.currencySymbol ?? "" });
+  });
+
+  router.add("PUT", "/admin/venues/:venueId/currency", async (req, res, params) => {
+    let body;
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      return sendJson(res, 400, { error: "invalid JSON body" });
+    }
+    const { currencySymbol } = body;
+    if (typeof currencySymbol !== "string") {
+      return sendJson(res, 400, { error: "currencySymbol must be a string" });
+    }
+
+    db.prepare(
+      `INSERT INTO venues (id, name, currency_symbol, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET currency_symbol = excluded.currency_symbol`,
+    ).run(params.venueId, params.venueId, currencySymbol, new Date().toISOString());
+
+    sendJson(res, 200, { currencySymbol });
   });
 
   router.add("GET", "/admin/venues/:venueId/playlist-tracks", async (req, res, params) => {
@@ -296,6 +339,7 @@ function buildRouter(db, getWss) {
       tableId: resolved.tableId,
       kind: resolved.kind,
       pricePerUse: resolved.pricePerUse,
+      currencySymbol: resolved.currencySymbol,
       ...queueStatePayload(db, resolved.venueId),
     });
   });
@@ -361,6 +405,23 @@ function buildRouter(db, getWss) {
     sendJson(res, 200, { cancelled });
   });
 
+  router.add("POST", "/t/:token/queue/:entryId/skip", async (req, res, params) => {
+    const resolved = resolveToken(db, params.token);
+    if (!resolved) {
+      return sendJson(res, 404, { error: "unknown table" });
+    }
+
+    // Resolved tableId only, never client-supplied.
+    const skipResult = skipPlaying(db, { tableId: resolved.tableId, entryId: params.entryId });
+    if (!skipResult) {
+      return sendJson(res, 404, { error: "no matching playing entry for this table" });
+    }
+
+    const advanceResult = normalizeAdvanceResult(advance(db, resolved.venueId));
+    broadcastToClients(getWss(), db, resolved.venueId, { skipTo: advanceResult });
+    sendJson(res, 200, { billable: skipResult.billable, advance: advanceResult });
+  });
+
   router.add("GET", "/player/:token", async (req, res, params) => {
     const resolved = resolvePlayerToken(db, params.token);
     if (!resolved) {
@@ -383,20 +444,20 @@ function buildRouter(db, getWss) {
       return sendJson(res, 404, { error: "unknown player" });
     }
 
-    const result = advance(db, resolved.venueId);
+    const result = normalizeAdvanceResult(advance(db, resolved.venueId));
     broadcastToClients(getWss(), db, resolved.venueId);
-
-    if (result.type === "request") {
-      return sendJson(res, 200, { type: "request", entry: toApiEntry(result.entry) });
-    }
     sendJson(res, 200, result);
   });
 
   return router;
 }
 
-function broadcastToClients(wss, db, venueId) {
-  const message = JSON.stringify({ type: "queue-state", ...queueStatePayload(db, venueId) });
+function broadcastToClients(wss, db, venueId, extra = {}) {
+  const message = JSON.stringify({
+    type: "queue-state",
+    ...queueStatePayload(db, venueId),
+    ...extra,
+  });
   for (const client of wss.clients) {
     if (client.readyState === client.OPEN) {
       client.send(message);

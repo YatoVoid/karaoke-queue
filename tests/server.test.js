@@ -409,6 +409,95 @@ test("GET /admin/venues/:venueId/tables lists tables with pairing status", async
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
 
+test("GET /admin/.../tables reports a billableCount of 0 for a table with no completed plays", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const table = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "Table 7", kind: "public", pricePerUse: 2 }),
+    })
+  ).json();
+
+  const list = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`)
+  ).json();
+  const row = list.find((t) => t.id === table.id);
+  assert.equal(row.billableCount, 0);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /admin/.../tables counts a table's done entries as billableCount", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { tableId } = await createAndPairTable(port, "Table 1", "public", 2);
+
+  enqueue(db, { venueId: VENUE, tableId, songTitle: "A", songRef: "yt:a" });
+  const { advance } = await import("../src/queueEngine.js");
+  advance(db, VENUE); // -> playing
+  advance(db, VENUE); // -> done
+
+  const list = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`)
+  ).json();
+  const row = list.find((t) => t.id === tableId);
+  assert.equal(row.billableCount, 1);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("PUT then GET /admin/.../currency round-trips the venue's currency symbol", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const putRes = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/currency`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ currencySymbol: "$" }),
+  });
+  assert.equal((await putRes.json()).currencySymbol, "$");
+
+  const getRes = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/currency`);
+  assert.equal((await getRes.json()).currencySymbol, "$");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /admin/.../currency defaults to an empty string when never set", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/currency`);
+  assert.equal((await res.json()).currencySymbol, "");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /t/:token/state reflects the venue's currency symbol", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/currency`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ currencySymbol: "₼" }),
+  });
+  const { token } = await createAndPairTable(port, "Table 1", "public", 2);
+
+  const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
+  assert.equal(state.currencySymbol, "₼");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
 test("GET /t/:token/state includes pricePerUse", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });
@@ -694,6 +783,89 @@ test("a table's token cannot cancel a different table's entry (impersonation)", 
   const stateA = await (await fetch(`http://127.0.0.1:${port}/t/${tableA.token}/state`)).json();
   assert.equal(stateA.queued.length, 1);
   assert.equal(stateA.queued[0].id, entryA.id);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /t/:token/queue/:entryId/skip cancels the table's own playing entry within the grace window", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { tableId, token } = await createAndPairTable(port);
+
+  const entry = enqueue(db, { venueId: VENUE, tableId, songTitle: "A", songRef: "yt:a" });
+  const { advance } = await import("../src/queueEngine.js");
+  advance(db, VENUE); // -> playing
+
+  const res = await fetch(`http://127.0.0.1:${port}/t/${token}/queue/${entry.id}/skip`, {
+    method: "POST",
+  });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.billable, false);
+
+  const row = db.prepare("SELECT status FROM queue_entries WHERE id = ?").get(entry.id);
+  assert.equal(row.status, "cancelled");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /t/:token/queue/:entryId/skip 404s for a different table's playing entry", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const tableA = await createAndPairTable(port, "Table A");
+  const tableB = await createAndPairTable(port, "Table B");
+
+  const entryA = enqueue(db, {
+    venueId: VENUE,
+    tableId: tableA.tableId,
+    songTitle: "A",
+    songRef: "yt:a",
+  });
+  const { advance } = await import("../src/queueEngine.js");
+  advance(db, VENUE); // -> playing
+
+  const res = await fetch(
+    `http://127.0.0.1:${port}/t/${tableB.token}/queue/${entryA.id}/skip`,
+    { method: "POST" },
+  );
+  assert.equal(res.status, 404);
+
+  const row = db.prepare("SELECT status FROM queue_entries WHERE id = ?").get(entryA.id);
+  assert.equal(row.status, "playing");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /t/:token/queue/:entryId/skip advances to the next queued request", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const tableA = await createAndPairTable(port, "Table A");
+  const tableB = await createAndPairTable(port, "Table B");
+
+  const entryA = enqueue(db, {
+    venueId: VENUE,
+    tableId: tableA.tableId,
+    songTitle: "A",
+    songRef: "yt:a",
+  });
+  enqueue(db, { venueId: VENUE, tableId: tableB.tableId, songTitle: "B", songRef: "yt:b" });
+  const { advance } = await import("../src/queueEngine.js");
+  advance(db, VENUE); // A -> playing
+
+  const res = await fetch(`http://127.0.0.1:${port}/t/${tableA.token}/queue/${entryA.id}/skip`, {
+    method: "POST",
+  });
+  const body = await res.json();
+  assert.equal(body.advance.type, "request");
+  assert.equal(body.advance.entry.songTitle, "B");
+
+  const state = await (
+    await fetch(`http://127.0.0.1:${port}/t/${tableA.token}/state`)
+  ).json();
+  assert.equal(state.nowPlaying.songTitle, "B");
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });

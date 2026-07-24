@@ -66,11 +66,22 @@
 <body>
   <h1>Admin: venue <span id="venue-label"></span></h1>
 
+  <h2>Currency</h2>
+  <div class="panel">
+    <form id="currency-form">
+      <div class="field">
+        <label>Symbol shown on every price (e.g. $, &#8380;, AZN)</label>
+        <input type="text" id="currency-input" placeholder="$" />
+      </div>
+      <button type="submit">Save currency</button>
+    </form>
+  </div>
+
   <h2>Tables</h2>
   <div class="panel">
     <table>
       <thead>
-        <tr><th>Label</th><th>Kind</th><th>Price</th><th>Pairing</th><th>Actions</th></tr>
+        <tr><th>Label</th><th>Kind</th><th>Price</th><th>Billed</th><th>Pairing</th><th>Actions</th></tr>
       </thead>
       <tbody id="table-rows"></tbody>
     </table>
@@ -144,6 +155,10 @@
     }
     document.getElementById("venue-label").textContent = displayVenueId;
 
+    const currencyFormEl = document.getElementById("currency-form");
+    const currencyInputEl = document.getElementById("currency-input");
+    let currencySymbol = "";
+
     const tableRowsEl = document.getElementById("table-rows");
     const noTablesEl = document.getElementById("no-tables");
     const tableListErrorEl = document.getElementById("table-list-error");
@@ -188,11 +203,15 @@
 
       tables.forEach((t) => {
         const tr = document.createElement("tr");
-        const priceText = t.kind === "public" ? String(t.pricePerUse) : "free";
+        const priceText = t.kind === "public" ? `${currencySymbol}${t.pricePerUse}` : "free";
+        const billedText =
+          t.kind === "public"
+            ? `${t.billableCount} (${currencySymbol}${t.billableCount * t.pricePerUse})`
+            : String(t.billableCount);
         const pairingCell = t.pairingUrl
           ? `<code>${escapeHtml(t.pairingUrl)}</code>`
           : `<button class="small" data-pair-table-id="${t.id}">Pair</button>`;
-        tr.innerHTML = `<td>${escapeHtml(t.label)}</td><td>${t.kind}</td><td>${priceText}</td><td>${pairingCell}</td><td><button class="small" data-edit-table-id="${t.id}" data-label="${escapeHtml(t.label)}" data-kind="${t.kind}" data-price="${t.pricePerUse}">Edit</button> <button class="small" data-delete-table-id="${t.id}" data-label="${escapeHtml(t.label)}">Delete</button></td>`;
+        tr.innerHTML = `<td>${escapeHtml(t.label)}</td><td>${t.kind}</td><td>${priceText}</td><td>${billedText}</td><td>${pairingCell}</td><td><button class="small" data-edit-table-id="${t.id}" data-label="${escapeHtml(t.label)}" data-kind="${t.kind}" data-price="${t.pricePerUse}">Edit</button> <button class="small" data-delete-table-id="${t.id}" data-label="${escapeHtml(t.label)}">Delete</button></td>`;
         tableRowsEl.appendChild(tr);
       });
 
@@ -252,6 +271,25 @@
         });
       });
     }
+
+    async function loadCurrency() {
+      const res = await fetch(`/admin/venues/${venueId}/currency`);
+      const body = await res.json();
+      currencySymbol = body.currencySymbol;
+      currencyInputEl.value = currencySymbol;
+    }
+
+    currencyFormEl.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const res = await fetch(`/admin/venues/${venueId}/currency`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currencySymbol: currencyInputEl.value }),
+      });
+      const body = await res.json();
+      currencySymbol = body.currencySymbol;
+      await loadTables();
+    });
 
     createFormEl.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -352,7 +390,7 @@
       await loadPlaylist();
     });
 
-    loadTables();
+    loadCurrency().then(loadTables);
     loadPlaylist();
   </script>
 </body>
