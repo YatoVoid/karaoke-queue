@@ -15,10 +15,7 @@
     --danger: #ff6e6e;
   }
   * { box-sizing: border-box; }
-  /* The [hidden] attribute is only honored via the UA stylesheet at very
-     low specificity — any element-specific `display` rule below (e.g.
-     `form#request-form { display: flex }`) silently wins over it. Force
-     it to actually work regardless of what else targets the element. */
+  /* Beats any element-specific display rule below. */
   [hidden] { display: none !important; }
   body {
     margin: 0;
@@ -27,11 +24,7 @@
     background: var(--bg);
     color: var(--text);
     padding: 24px 16px 48px;
-    /* Without this, content stretches full-bleed on a large/wide
-       display (a real monitor, or a browser window maximized on one) —
-       inputs and buttons spanning 3000+ px look lost and unreadable.
-       Matches admin.html's existing max-width, for visual consistency
-       across the whole product too. */
+    /* Caps width on large displays. */
     max-width: 720px;
     margin-inline: auto;
   }
@@ -150,22 +143,13 @@
     let myTableId = null;
     let myPricePerUse = null;
 
-    // The server fetches the real YouTube title via the official,
-    // keyless oEmbed endpoint whenever it can (see src/youtube.js's
-    // fetchOembedTitle) — the raw pasted text is only ever shown as a
-    // fallback if that lookup fails. Thumbnails are always YouTube's
-    // static images, which need no key either way.
+    // Static thumbnail, no API key needed.
     function thumbnailUrl(songRef) {
       return `https://img.youtube.com/vi/${songRef}/default.jpg`;
     }
 
     function render(state) {
-      // WebSocket broadcasts are venue-wide (one shared message for every
-      // connected client, regardless of which table they are), so they
-      // never carry a viewer-specific tableId — only the initial
-      // GET /t/:token/state response does. Only set myTableId when the
-      // incoming payload actually has one; a WS push must never blank out
-      // an already-known identity.
+      // WS pushes lack tableId; don't blank it out.
       if (state.tableId !== undefined) {
         myTableId = state.tableId;
       }
@@ -173,18 +157,14 @@
         myPricePerUse = state.pricePerUse;
       }
       priceLineEl.hidden = !(myPricePerUse > 0);
-      priceLineEl.textContent = `This costs ${myPricePerUse} — ask staff to add it to your bill.`;
+      priceLineEl.textContent = `This costs ${myPricePerUse}. Ask staff to add it to your bill.`;
 
       nowPlayingEl.innerHTML = state.nowPlaying
         ? `<div class="title-row"><img src="${thumbnailUrl(state.nowPlaying.songRef)}" alt="" /><span class="title">${escapeHtml(state.nowPlaying.songTitle)}</span></div>`
         : `<span class="empty">Nothing playing right now.</span>`;
 
       queueListEl.innerHTML = "";
-      // "mine" must also match a request that's been promoted to
-      // 'playing' — once the player advances it, it's removed from
-      // state.queued entirely (queuedList only returns status='queued'
-      // rows), so checking queued alone would wrongly show the request
-      // form again while this table's own song is the one playing.
+      // Also matches a promoted-to-playing entry.
       const mine =
         state.queued.find((e) => e.tableId === myTableId) ??
         (state.nowPlaying?.tableId === myTableId ? state.nowPlaying : null);
@@ -206,9 +186,7 @@
         formEl.hidden = true;
         if (mine.status === "playing") {
           mineStatusTextEl.textContent = "Your song is playing now!";
-          // cancel() only ever removes status='queued' rows (KR1) — a
-          // cancel attempt on a playing entry would silently do
-          // nothing, so don't offer a button that wouldn't work.
+          // cancel() can't touch a playing entry.
           cancelButtonEl.hidden = true;
         } else {
           mineStatusTextEl.textContent = "Your song is in the queue.";
@@ -280,7 +258,7 @@
         return;
       }
       if (!res.ok) {
-        hintEl.textContent = "Something went wrong — try again.";
+        hintEl.textContent = "Something went wrong. Try again.";
         hintEl.classList.add("error");
         return;
       }

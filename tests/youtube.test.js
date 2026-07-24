@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { extractVideoId, fetchOembedTitle } from "../src/youtube.js";
 
 const ID = "dQw4w9WgXcQ"; // 11 chars, real-shaped example ID
-const REAL_VIDEO_ID = "jNQXAC9IVRw"; // "Me at the zoo" — real, distinct from ID above
+const REAL_VIDEO_ID = "jNQXAC9IVRw"; // "Me at the zoo"
 
 test("accepts a bare video ID", () => {
   assert.equal(extractVideoId(ID), ID);
@@ -58,11 +58,7 @@ test("returns null for a too-long ID-like string", () => {
   assert.equal(extractVideoId("waytoolongtobeavalidid"), null);
 });
 
-// Real network calls to YouTube's real oEmbed endpoint — deliberately not
-// mocked, matching this project's established precedent (KR4) of
-// verifying real YouTube-dependent behavior against the real service
-// rather than a fabricated mock that would only prove the code handles
-// a shape it was told to expect.
+// Real network calls, not mocked.
 test("fetchOembedTitle returns the real title for a known, real video ID", async () => {
   const title = await fetchOembedTitle(REAL_VIDEO_ID);
   assert.equal(title, "Me at the zoo");

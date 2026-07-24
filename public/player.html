@@ -7,11 +7,7 @@
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
-  /* Same pitfall as table.html: the [hidden] attribute is only honored
-     via the UA stylesheet at very low specificity, and several elements
-     below have their own ID-selector `display` rules (e.g.
-     #idle-message's `display: flex`) that would otherwise silently win
-     over it. */
+  /* Beats any element-specific display rule below. */
   [hidden] { display: none !important; }
   body {
     margin: 0;
@@ -54,7 +50,7 @@
 </head>
 <body>
   <div id="player-column">
-    <div id="idle-message" hidden>Waiting for requests…</div>
+    <div id="idle-message" hidden>Waiting for requests...</div>
     <div id="yt-player-wrap" hidden><div id="yt-player"></div></div>
   </div>
   <div id="sidebar">
@@ -94,11 +90,7 @@
             }
           },
           onStateChange: onPlayerStateChange,
-          // Not every YouTube video allows embedding (uploader-controlled;
-          // confirmed via real testing — some real, valid video IDs
-          // genuinely refuse to embed). Without this, one unembeddable
-          // guest-submitted request would leave the player stuck on a
-          // broken screen forever instead of moving on.
+          // Some videos block embedding; skip instead of getting stuck.
           onError: onPlayerError,
         },
       });
@@ -170,8 +162,7 @@
       if (state.nowPlaying) {
         applyNowPlaying(state.nowPlaying);
       } else {
-        // Nothing has ever played (or the page reloaded mid-idle) —
-        // kick off playback rather than sitting idle forever.
+        // Nothing has played yet; kick off playback.
         await advance();
       }
     }
@@ -182,10 +173,7 @@
       ws.addEventListener("message", (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "queue-state") {
-          // Only keep the side panel live — playback itself is driven
-          // solely by advance() calls (page load + video-ended), never
-          // by a WS push, so a table enqueuing/cancelling never
-          // interrupts whatever is currently playing.
+          // Side panel only; playback never reacts to WS pushes.
           renderSideQueue(message.queued);
         }
       });

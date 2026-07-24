@@ -16,8 +16,8 @@ npm start
 
 Two environment variables control where it runs:
 
-- `PORT` — defaults to `8080`.
-- `DB_PATH` — defaults to `./data/karaoke-queue.sqlite`. The database is
+- `PORT`: defaults to `8080`.
+- `DB_PATH`: defaults to `./data/karaoke-queue.sqlite`. The database is
   a plain SQLite file with no migration system; delete it to start over.
 
 On startup it prints every LAN-reachable address it found, e.g.:
@@ -26,7 +26,7 @@ On startup it prints every LAN-reachable address it found, e.g.:
 karaoke-queue listening on port 8080
 Database: ./data/karaoke-queue.sqlite
 
-There is no venue-registration step — pick any consistent
+There is no venue-registration step. Pick any consistent
 string as your venue id (e.g. "main") the first time you
 visit an admin URL with it. Open one of these on a device
 connected to the same network to set up tables:
@@ -34,11 +34,11 @@ connected to the same network to set up tables:
   http://192.168.1.42:8080/admin/venues/main
 ```
 
-There is no venue "registration" step — a venue is just whatever id
+There is no venue "registration" step: a venue is just whatever id
 string you consistently use in your URLs (`main`, `downstairs`, anything).
 The whole system is meant to run on one device on the venue's own
 network (a laptop, or a phone acting as a WiFi hotspot) with tablets and
-the output device connecting to that same network — no internet
+the output device connecting to that same network. No internet
 connection is required for the system to function.
 
 ### Device combinations
@@ -51,7 +51,7 @@ all joined to the same network as the server. Some real combinations:
 - **Testing on one device.** Run the server on a laptop and open
   `/admin/...`, `/t/...`, and `/player/...` in separate browser tabs on
   that same laptop. Nothing about the software cares that they're the
-  same machine — this is just the fastest way to try it out.
+  same machine, it's just the fastest way to try it out.
 - **Real deployment, laptop as host.** A laptop runs the server and
   stays on all night; each table's tablet has its browser pointed
   permanently at its own `/t/:token` URL; a separate device (could be
@@ -59,7 +59,7 @@ all joined to the same network as the server. Some real combinations:
   stays open on `/player/:token`.
 - **Phone acting as the hotspot AND the server.** If your phone can both
   create a WiFi hotspot and run this project (e.g. via Termux or
-  similar), it's both roles at once — tablets and the player device
+  similar), it's both roles at once: tablets and the player device
   join the phone's hotspot and use whatever LAN address it reports on
   startup.
 - **Phone acting as ONLY the hotspot.** Some setups instead have the
@@ -68,7 +68,7 @@ all joined to the same network as the server. Some real combinations:
   join the phone's hotspot, but the address they connect to is the
   laptop's IP on that hotspot, not the phone's.
 - **The player device can be anything on the network.** `/player/:token`
-  is just a URL — it doesn't have to run on the same device as the
+  is just a URL, it doesn't have to run on the same device as the
   server. Point whatever is actually wired or Bluetooth-connected to the
   venue's speakers (a TV, a mini PC, another tablet) at that URL.
 
@@ -77,7 +77,7 @@ hotspots enable "client isolation" (sometimes called "AP isolation" or
 "guest network" mode) by default, which lets every device reach the
 internet but blocks them from reaching each other. If tablets can join
 the network but can't load the admin/table/player URLs, this is almost
-always why — look for that setting and turn it off.
+always why. Look for that setting and turn it off.
 
 ## Setting up a venue
 
@@ -85,10 +85,10 @@ always why — look for that setting and turn it off.
 
 1. Start the server (above) and open the printed admin URL
    (`/admin/venues/<your-venue-id>`) from any device on the network.
-2. **Create tables** — a label, `public` (pays a per-use price, shown on
+2. **Create tables**: a label, `public` (pays a per-use price, shown on
    the table's own page for staff to add to the bill at checkout) or
    `private` (always free, e.g. a room already charging a deposit).
-3. **Pair each table** — click "Pair" next to a table, get its
+3. **Pair each table**: click "Pair" next to a table, get its
    `/t/:token` URL. Point that specific tablet's browser (ideally kiosk
    mode, or just its bookmarked homepage) at that URL permanently. The
    token is what makes the anti-cheat guarantee work: refreshing the
@@ -96,12 +96,12 @@ always why — look for that setting and turn it off.
    the same URL, so a table can never gain extra free requests that way,
    and a table's identity can't be spoofed by guessing another table's
    ID (the token is a long random value, not a number).
-4. **Add background playlist tracks** — paste YouTube links/video IDs in
+4. **Add background playlist tracks**: paste YouTube links/video IDs in
    the "Background playlist" section. This plays on a continuous loop
    whenever no table has an active request.
 5. **Create a player token** and open the resulting `/player/:token` URL
    on whatever device is connected to the venue's speakers (Bluetooth or
-   wired — that connection is the OS's job, outside this software).
+   wired, that connection is the OS's job, outside this software).
    That page is the only thing that actually plays audio; leave it
    open and full-screen on that device.
 
@@ -113,7 +113,7 @@ Opening a paired `/t/:token` URL shows what's currently playing, the
 live queue (so a table can see how many requests are ahead of them), and
 a form to paste a YouTube link or video ID. A table can have one active
 request at a time; once it's played (or cancelled), they can request
-again. Everything updates live via WebSocket — no refreshing needed, and
+again. Everything updates live via WebSocket, no refreshing needed, and
 refreshing doesn't help a table cheat the one-active-request rule either
 way, since that's enforced server-side, not by anything the browser
 remembers.
@@ -125,26 +125,26 @@ remembers.
 - **No typed song search.** Finding a song means pasting its YouTube link
   or video ID, not typing a title and picking from search results. Real
   search needs the YouTube Data API, which requires a Google Cloud
-  credential this project doesn't have and can't provision — a venue
+  credential this project doesn't have and can't provision. A venue
   operator with their own API key could wire this in as a future
   enhancement. (Once a link is pasted, though, the real video title is
   fetched automatically via YouTube's official, keyless oEmbed
-  endpoint — a different, credential-free API — so the queue shows the
+  endpoint, a different, credential-free API, so the queue shows the
   actual song title, not the raw link, falling back to the pasted text
   only if that lookup fails.)
 - **No payment processing.** The price shown on a public table's page is
-  for staff to notice and manually add to the bill at checkout — this
+  for staff to notice and manually add to the bill at checkout. This
   software has no card/payment integration.
 - **Public-performance licensing is not addressed.** Playing music (from
   any source, YouTube included) in a commercial venue typically requires
   a PRO license (ASCAP/BMI-style, or a regional equivalent) independent
   of how the audio is sourced. That's a real business/legal
-  responsibility for the venue to handle — this software has no way to
+  responsibility for the venue to handle. This software has no way to
   resolve it and doesn't attempt to.
 - **Admin routes have no login.** They're presumed to be operated by
   whoever is setting up the system, not exposed to guests. There's no
   authentication in front of `/admin/*`.
-- **Not every YouTube video allows embedding** — some videos have
+- **Not every YouTube video allows embedding.** Some videos have
   embedding disabled by their uploader. The player detects this and
   automatically moves on to the next item rather than getting stuck.
 - **No floor-plan editor.** Tables are a flat list (label, kind, price),

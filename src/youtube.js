@@ -18,12 +18,7 @@ export function extractVideoId(input) {
   return null;
 }
 
-// YouTube's official, keyless oEmbed endpoint — distinct from the paid/
-// keyed Data API (used for search, which this project deliberately
-// doesn't attempt). Given a known video ID, returns its real title, or
-// null on ANY failure (bad ID, network error, timeout, unexpected
-// shape) — callers always fall back to their own default, this never
-// throws and never blocks on a slow/unreachable network.
+// Keyless oEmbed lookup, never throws.
 export async function fetchOembedTitle(videoId) {
   try {
     const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;

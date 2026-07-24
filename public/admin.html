@@ -64,7 +64,7 @@
 </style>
 </head>
 <body>
-  <h1>Admin — venue <span id="venue-label"></span></h1>
+  <h1>Admin: venue <span id="venue-label"></span></h1>
 
   <h2>Tables</h2>
   <div class="panel">
@@ -112,7 +112,7 @@
   <h2>Background playlist</h2>
   <div class="panel">
     <ol id="playlist-rows" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;"></ol>
-    <p id="no-playlist-tracks" hidden style="color:#6b7280;">No playlist tracks yet — the queue falls back to silence when empty.</p>
+    <p id="no-playlist-tracks" hidden style="color:#6b7280;">No playlist tracks yet. The queue falls back to silence when empty.</p>
   </div>
 
   <h2>Add a playlist track</h2>
@@ -135,20 +135,12 @@
     import { extractVideoId } from "/youtube.js";
 
     const venueId = location.pathname.split("/").filter(Boolean)[2];
-    // location.pathname is NOT decoded by the browser (unlike location.href),
-    // so a non-ASCII venue id shows as raw percent-encoded gibberish
-    // ("%D1%80%D0%B5...") if displayed directly. Decode a separate copy
-    // for display only — venueId itself stays exactly as the browser gave
-    // it, since that's what's already correctly used to build every
-    // fetch() URL below (fetch's own URL parser handles it correctly
-    // either way; changing venueId itself is unnecessary and risks
-    // double-encoding if done carelessly).
+    // pathname isn't auto-decoded; decode a display-only copy.
     let displayVenueId = venueId;
     try {
       displayVenueId = decodeURIComponent(venueId);
     } catch {
-      // Malformed percent-encoding — fall back to the raw string rather
-      // than crash the page over a cosmetic label.
+      // Malformed encoding; keep the raw string.
     }
     document.getElementById("venue-label").textContent = displayVenueId;
 
@@ -235,7 +227,7 @@
 
           if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            tableListErrorEl.textContent = body.error || "Something went wrong — try again.";
+            tableListErrorEl.textContent = body.error || "Something went wrong. Try again.";
             tableListErrorEl.hidden = false;
             return;
           }
@@ -252,7 +244,7 @@
           tableListErrorEl.hidden = true;
           const res = await fetch(`/admin/venues/${venueId}/tables/${tableId}`, { method: "DELETE" });
           if (!res.ok) {
-            tableListErrorEl.textContent = "Something went wrong — try again.";
+            tableListErrorEl.textContent = "Something went wrong. Try again.";
             tableListErrorEl.hidden = false;
             return;
           }
@@ -275,7 +267,7 @@
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        tableFormErrorEl.textContent = body.error || "Something went wrong — try again.";
+        tableFormErrorEl.textContent = body.error || "Something went wrong. Try again.";
         tableFormErrorEl.hidden = false;
         return;
       }
@@ -348,7 +340,7 @@
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        playlistHintEl.textContent = body.error || "Something went wrong — try again.";
+        playlistHintEl.textContent = body.error || "Something went wrong. Try again.";
         playlistHintEl.classList.add("error");
         return;
       }

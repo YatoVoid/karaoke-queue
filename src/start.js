@@ -29,7 +29,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`karaoke-queue listening on port ${port}`);
     console.log(`Database: ${dbPath}`);
     console.log("");
-    console.log("There is no venue-registration step — pick any consistent");
+    console.log("There is no venue-registration step. Pick any consistent");
     console.log("string as your venue id (e.g. \"main\") the first time you");
     console.log("visit an admin URL with it. Open one of these on a device");
     console.log("connected to the same network to set up tables:");

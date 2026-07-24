@@ -364,17 +364,17 @@ test("DELETE /admin/.../tables/:tableId invalidates its pairing token and cancel
   );
   assert.equal((await deleteRes.json()).deleted, true);
 
-  // The deleted table's own paired URL must stop resolving.
+  // Paired URL stops resolving.
   const staleRes = await fetch(`http://127.0.0.1:${port}/t/${token}`);
   assert.equal(staleRes.status, 404);
 
-  // Its queued entry must no longer be live in the venue's queue.
+  // Queued entry no longer live.
   const state = await (
     await fetch(`http://127.0.0.1:${port}/t/${other.token}/state`)
   ).json();
   assert.ok(!state.queued.some((e) => e.tableId === tableId));
 
-  // The OTHER table's own queued entry must be untouched (isolation).
+  // Other table untouched.
   assert.ok(state.queued.some((e) => e.id === otherEntry.id && e.status === "queued"));
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
@@ -570,9 +570,7 @@ test("POST /t/:token/queue stores the extracted bare video ID, not the full past
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
 
-// Real network call to the real oEmbed endpoint — matches this project's
-// established precedent (KR4/KR11 Task 1) of verifying real
-// YouTube-dependent behavior rather than mocking it.
+// Real network call, not a mock.
 test("POST /t/:token/queue uses the real YouTube title over a wrong client-supplied one", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });
@@ -605,9 +603,7 @@ test("GET /t/:token/state returns nowPlaying in camelCase, matching the enqueue 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title: "Song A", songRef: "aaaaaaaaaaa" }),
   });
-  // advance() has no HTTP route yet (future KR) — call the engine directly
-  // to move the entry into 'playing', matching how a future player-page
-  // KR will drive this.
+  // Move the entry into 'playing' directly.
   const { advance } = await import("../src/queueEngine.js");
   advance(db, VENUE);
 
@@ -686,7 +682,7 @@ test("a table's token cannot cancel a different table's entry (impersonation)", 
     })
   ).json();
 
-  // Table B tries to cancel table A's entry using its OWN token.
+  // B tries to cancel A's entry.
   const cancelRes = await fetch(
     `http://127.0.0.1:${port}/t/${tableB.token}/queue/${entryA.id}`,
     { method: "DELETE" },
@@ -694,7 +690,7 @@ test("a table's token cannot cancel a different table's entry (impersonation)", 
   const cancelBody = await cancelRes.json();
   assert.equal(cancelBody.cancelled, false);
 
-  // A's entry must still be queued — not silently cancelled by B.
+  // A's entry must still be queued.
   const stateA = await (await fetch(`http://127.0.0.1:${port}/t/${tableA.token}/state`)).json();
   assert.equal(stateA.queued.length, 1);
   assert.equal(stateA.queued[0].id, entryA.id);
@@ -715,8 +711,7 @@ test("one table already having an active entry does not block a different table'
     body: JSON.stringify({ title: "A's Song", songRef: "aaaaaaaaaaa" }),
   });
 
-  // Table B enqueues independently — the one-active-entry rule must be
-  // scoped per-table, not accidentally global across the whole venue.
+  // Scoped per-table, not global.
   const bRes = await fetch(`http://127.0.0.1:${port}/t/${tableB.token}/queue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -926,7 +921,7 @@ test("DELETE playlist-tracks removes only the targeted venue's track", async () 
 
   const { body: track } = await addPlaylistTrack(port, VENUE, "Ambient 1", "aaaaaaaaaaa");
 
-  // A different venue's URL cannot delete this track.
+  // Wrong venue cannot delete this track.
   const wrongVenueRes = await fetch(
     `http://127.0.0.1:${port}/admin/venues/other-venue/playlist-tracks/${track.id}`,
     { method: "DELETE" },
@@ -970,10 +965,7 @@ test("advance() correctly reads playlist tracks created through the new routes (
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
 
-// The objective's real-world context is Azerbaijan; non-ASCII table
-// labels and song titles (Azerbaijani Latin-script special characters,
-// or Cyrillic, widely used/understood there too) are ordinary expected
-// input, never exercised anywhere else in this suite.
+// Non-ASCII input is ordinary and expected here.
 test("table labels with Azerbaijani special characters round-trip exactly", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });
@@ -1003,9 +995,7 @@ test("a Cyrillic song title survives the full round trip when oEmbed can't overr
   const { token } = await createAndPairTable(port);
 
   const title = "Комбинация — Русский стиль";
-  // A syntactically-valid but nonexistent ID (confirmed to 404 at
-  // oEmbed in KR11's own tests) — isolates that THIS test is checking
-  // client-supplied text survival, not YouTube's own real title winning.
+  // Nonexistent ID, so oEmbed can't override the title.
   await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

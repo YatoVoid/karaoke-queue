@@ -1,5 +1,4 @@
-// Minimal path-param router — no framework dependency, matches this
-// project's deliberately small dependency footprint (see KR1 rationale).
+// No framework dependency.
 export class Router {
   constructor() {
     this.routes = [];

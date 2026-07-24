@@ -44,10 +44,7 @@ function readJsonBody(req) {
   });
 }
 
-// Normalizes a raw queue_entries DB row (snake_case columns) to the same
-// camelCase shape enqueue() already returns — API consumers should never
-// see two different field-naming conventions depending on which route
-// they called.
+// Matches enqueue()'s camelCase shape.
 function toApiEntry(row) {
   if (!row) return null;
   return {
@@ -82,10 +79,7 @@ function queueStatePayload(db, venueId) {
 
 const VALID_TABLE_KINDS = new Set(["public", "private"]);
 
-// Shared by table creation (POST) and editing (PATCH) so the two routes
-// can never drift apart on what counts as a valid table — an edit that
-// accepted something creation would reject (or vice versa) would be a
-// real, confusing inconsistency.
+// Shared between table creation and editing.
 function validateTableInput({ label, kind, pricePerUse }) {
   if (typeof label !== "string" || !label.trim()) {
     return "label is required";
@@ -126,9 +120,7 @@ function buildRouter(db, getWss) {
       return sendJson(res, 400, { error: validationError });
     }
 
-    // Private tables are always free per the objective's business model —
-    // enforced here regardless of what the request sends, not left as a
-    // client-side convention the admin form merely happens to follow.
+    // Private tables are always free, regardless of what was sent.
     const finalPrice = kind === "private" ? 0 : (pricePerUse ?? 0);
 
     const id = randomUUID();
@@ -173,12 +165,7 @@ function buildRouter(db, getWss) {
       .prepare("DELETE FROM tables WHERE id = ? AND venue_id = ?")
       .run(params.tableId, params.venueId);
 
-    // Neither pairing_tokens nor queue_entries has a DB-level foreign
-    // key / cascade to tables (see src/db.js — no FOREIGN KEY declared
-    // anywhere in this schema), so a deleted table's own rows in both
-    // would otherwise linger forever: an orphaned pairing token that
-    // still resolves, and a 'queued' entry with no table left to ever
-    // cancel or claim it.
+    // No FK cascade in this schema, so clean up manually.
     db.prepare("DELETE FROM pairing_tokens WHERE table_id = ?").run(params.tableId);
     db.prepare(
       "UPDATE queue_entries SET status = 'cancelled' WHERE table_id = ? AND status = 'queued'",
@@ -332,24 +319,17 @@ function buildRouter(db, getWss) {
     if (typeof songRef !== "string" || !songRef.trim()) {
       return sendJson(res, 400, { error: "songRef is required" });
     }
-    // The table page already extracts a bare video ID client-side before
-    // submitting, but this route is directly reachable regardless of the
-    // page — re-validating here (idempotent against an already-bare ID)
-    // is the actual enforcement point, not the client-side check.
+    // Server-side enforcement, not just the client's own check.
     const videoId = extractVideoId(songRef);
     if (!videoId) {
       return sendJson(res, 400, { error: "songRef must be a valid YouTube link or video ID" });
     }
-    // Best-effort real title via YouTube's official oEmbed endpoint — any
-    // failure (bad ID, network issue, timeout) falls back to whatever
-    // the requester typed, never blocking the request itself.
+    // Falls back to the typed title on any lookup failure.
     const realTitle = await fetchOembedTitle(videoId);
 
     let entry;
     try {
-      // Table identity comes ONLY from the resolved token, never from the
-      // request body — this is the actual anti-impersonation enforcement
-      // point for this route.
+      // Identity from the token only, never the request body.
       entry = enqueue(db, {
         venueId: resolved.venueId,
         tableId: resolved.tableId,
@@ -373,9 +353,7 @@ function buildRouter(db, getWss) {
       return sendJson(res, 404, { error: "unknown table" });
     }
 
-    // Same enforcement point: cancel() is called with the RESOLVED
-    // tableId, never a client-supplied one, so a token can only ever
-    // cancel its own table's entries.
+    // Resolved tableId only, never client-supplied.
     const cancelled = cancel(db, { tableId: resolved.tableId, entryId: params.entryId });
     if (cancelled) {
       broadcastToClients(getWss(), db, resolved.venueId);
