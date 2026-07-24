@@ -1,6 +1,7 @@
 # karaoke-queue
 
-![This image was AI generated, sadly](screenshots/mockup.png)
+![Mockup of the system in a restaurant](screenshots/mockup.png)
+*This image was AI generated, sadly*
 
 A local-network song-request queue for restaurants and venues, built to
 replace expensive per-song paid karaoke systems (the common model in
