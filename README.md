@@ -1,5 +1,7 @@
 # karaoke-queue
 
+![This image was AI generated, sadly](screenshots/mockup.png)
+
 A local-network song-request queue for restaurants and venues, built to
 replace expensive per-song paid karaoke systems (the common model in
 Azerbaijan: ~2 manat per song added to the bill) with a cheap or free,
