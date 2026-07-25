@@ -18,8 +18,10 @@
     max-width: 720px;
     margin-inline: auto;
   }
-  h1 { font-size: 1.3rem; margin: 0 0 20px; }
-  h2 { font-size: 1rem; color: #9aa3b2; margin: 28px 0 12px; }
+  h1 { font-size: 1.3rem; margin: 0 0 8px; }
+  .page-intro { color: #9aa3b2; font-size: 0.9rem; line-height: 1.5; margin: 0 0 24px; }
+  h2 { font-size: 1rem; color: #9aa3b2; margin: 28px 0 4px; }
+  .section-hint { color: #6b7280; font-size: 0.85rem; margin: 0 0 12px; line-height: 1.4; }
   .panel { background: #1a1d24; border-radius: 14px; padding: 18px; }
   table { width: 100%; border-collapse: collapse; }
   th, td { text-align: left; padding: 14px 8px; border-bottom: 1px solid #2a2d36; font-size: 0.9rem; }
@@ -54,12 +56,14 @@
   button:hover { filter: brightness(1.08); }
   button:active { transform: scale(0.96); filter: brightness(0.85); }
   button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
   button.small { padding: 8px 14px; font-size: 0.9rem; min-height: 40px; }
   .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
   .url-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .url-row code { flex: 1; min-width: 0; }
   .hint { font-size: 0.85rem; color: #9aa3b2; min-height: 1.2em; margin: 0; }
   .hint.error { color: #ff6e6e; }
+  .hint.success { color: #6ee7ff; }
   #playlist-rows li {
     background: #0b0d11;
     border-radius: 10px;
@@ -105,19 +109,29 @@
 </head>
 <body>
   <h1>Admin: venue <span id="venue-label"></span></h1>
+  <p class="page-intro">
+    Setup order: set a currency, add your tables and pair each one to a
+    device, create a player link for the speakers, then optionally add
+    background music for when no one's playing anything.
+  </p>
 
-  <h2>Currency</h2>
+  <h2>1. Currency</h2>
+  <p class="section-hint">Shown next to every price, so a number like "2" reads as an actual amount.</p>
   <div class="panel">
     <form id="currency-form">
       <div class="field">
         <label>Currency</label>
         <select id="currency-input"></select>
       </div>
-      <button type="submit">Save currency</button>
+      <div class="url-row">
+        <button type="submit">Save currency</button>
+        <p class="hint" id="currency-hint"></p>
+      </div>
     </form>
   </div>
 
-  <h2>Tables</h2>
+  <h2>2. Tables</h2>
+  <p class="section-hint">Each table's link is what its guests use to request songs. Tap "Pair" to get one, then keep that device (a tablet, kiosk, whatever) open on it.</p>
   <div class="panel">
     <table>
       <thead>
@@ -125,11 +139,10 @@
       </thead>
       <tbody id="table-rows"></tbody>
     </table>
-    <p id="no-tables" hidden style="color:#6b7280;">No tables yet.</p>
+    <p id="no-tables" hidden style="color:#6b7280;">No tables yet — add one below.</p>
     <p class="hint error" id="table-list-error" hidden></p>
   </div>
 
-  <h2>Add a table</h2>
   <div class="panel">
     <form id="create-form">
       <div class="field">
@@ -150,26 +163,27 @@
         </div>
       </div>
       <p class="hint error" id="table-form-error" hidden></p>
-      <button type="submit">Create table</button>
+      <button type="submit">Add table</button>
     </form>
   </div>
 
-  <h2>Player</h2>
+  <h2>3. Player</h2>
+  <p class="section-hint">Open this link on whatever's connected to the speakers — a TV browser, a laptop, anything. Leave it open; it's the only thing that actually plays audio.</p>
   <div class="panel">
-    <button id="create-player-button">Create player token</button>
+    <button id="create-player-button">Create player link</button>
     <div class="url-row" id="player-url-row" hidden>
       <code id="player-url"></code>
       <button class="small" id="copy-player-url" type="button">Copy</button>
     </div>
   </div>
 
-  <h2>Background playlist</h2>
+  <h2>4. Background playlist</h2>
+  <p class="section-hint">Plays on loop whenever no table has an active request. Optional — skip this if you'd rather it stay silent between requests.</p>
   <div class="panel">
     <ol id="playlist-rows" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;"></ol>
     <p id="no-playlist-tracks" hidden style="color:#6b7280;">No playlist tracks yet. The queue falls back to silence when empty.</p>
   </div>
 
-  <h2>Add a playlist track</h2>
   <div class="panel">
     <form id="playlist-form">
       <div class="field">
@@ -200,6 +214,7 @@
 
     const currencyFormEl = document.getElementById("currency-form");
     const currencyInputEl = document.getElementById("currency-input");
+    const currencyHintEl = document.getElementById("currency-hint");
     let currencySymbol = "";
 
     const tableRowsEl = document.getElementById("table-rows");
@@ -230,6 +245,18 @@
 
     function absoluteUrl(path) {
       return `${location.origin}${path}`;
+    }
+
+    async function withBusy(button, fn) {
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = "Working…";
+      try {
+        await fn();
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+      }
     }
 
     async function copyText(text, buttonEl) {
@@ -302,11 +329,13 @@
       });
 
       tableRowsEl.querySelectorAll("[data-pair-table-id]").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const tableId = btn.dataset.pairTableId;
-          await fetch(`/admin/venues/${venueId}/tables/${tableId}/pair`, { method: "POST" });
-          await loadTables();
-        });
+        btn.addEventListener("click", () =>
+          withBusy(btn, async () => {
+            const tableId = btn.dataset.pairTableId;
+            await fetch(`/admin/venues/${venueId}/tables/${tableId}/pair`, { method: "POST" });
+            await loadTables();
+          }),
+        );
       });
 
       tableRowsEl.querySelectorAll("[data-edit-table-id]").forEach((btn) => {
@@ -324,20 +353,22 @@
           }
 
           tableListErrorEl.hidden = true;
-          const res = await fetch(`/admin/venues/${venueId}/tables/${tableId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ label: label.trim(), kind, pricePerUse }),
+          await withBusy(btn, async () => {
+            const res = await fetch(`/admin/venues/${venueId}/tables/${tableId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ label: label.trim(), kind, pricePerUse }),
+            });
+
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}));
+              tableListErrorEl.textContent = body.error || "Something went wrong. Try again.";
+              tableListErrorEl.hidden = false;
+              return;
+            }
+
+            await loadTables();
           });
-
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            tableListErrorEl.textContent = body.error || "Something went wrong. Try again.";
-            tableListErrorEl.hidden = false;
-            return;
-          }
-
-          await loadTables();
         });
       });
 
@@ -347,13 +378,15 @@
           if (!window.confirm(`Delete "${btn.dataset.label}"? This cannot be undone.`)) return;
 
           tableListErrorEl.hidden = true;
-          const res = await fetch(`/admin/venues/${venueId}/tables/${tableId}`, { method: "DELETE" });
-          if (!res.ok) {
-            tableListErrorEl.textContent = "Something went wrong. Try again.";
-            tableListErrorEl.hidden = false;
-            return;
-          }
-          await loadTables();
+          await withBusy(btn, async () => {
+            const res = await fetch(`/admin/venues/${venueId}/tables/${tableId}`, { method: "DELETE" });
+            if (!res.ok) {
+              tableListErrorEl.textContent = "Something went wrong. Try again.";
+              tableListErrorEl.hidden = false;
+              return;
+            }
+            await loadTables();
+          });
         });
       });
     }
@@ -418,49 +451,72 @@
       currencyInputEl.value = currencySymbol;
     }
 
-    currencyFormEl.addEventListener("submit", async (event) => {
+    currencyFormEl.addEventListener("submit", (event) => {
       event.preventDefault();
-      const res = await fetch(`/admin/venues/${venueId}/currency`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currencySymbol: currencyInputEl.value }),
+      const submitButton = currencyFormEl.querySelector('button[type="submit"]');
+      withBusy(submitButton, async () => {
+        const res = await fetch(`/admin/venues/${venueId}/currency`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currencySymbol: currencyInputEl.value }),
+        });
+        const body = await res.json();
+        currencySymbol = body.currencySymbol;
+        currencyHintEl.textContent = "Saved.";
+        currencyHintEl.classList.add("success");
+        setTimeout(() => {
+          currencyHintEl.textContent = "";
+          currencyHintEl.classList.remove("success");
+        }, 2000);
+        await loadTables();
       });
-      const body = await res.json();
-      currencySymbol = body.currencySymbol;
-      await loadTables();
     });
 
-    createFormEl.addEventListener("submit", async (event) => {
+    createFormEl.addEventListener("submit", (event) => {
       event.preventDefault();
-      const label = labelInputEl.value.trim();
-      const kind = kindInputEl.value;
-      const pricePerUse = kind === "private" ? 0 : Number(priceInputEl.value) || 0;
+      const submitButton = createFormEl.querySelector('button[type="submit"]');
+      withBusy(submitButton, async () => {
+        const label = labelInputEl.value.trim();
+        const kind = kindInputEl.value;
+        const pricePerUse = kind === "private" ? 0 : Number(priceInputEl.value) || 0;
 
-      const res = await fetch(`/admin/venues/${venueId}/tables`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label, kind, pricePerUse }),
+        const res = await fetch(`/admin/venues/${venueId}/tables`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ label, kind, pricePerUse }),
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          tableFormErrorEl.textContent = body.error || "Something went wrong. Try again.";
+          tableFormErrorEl.hidden = false;
+          return;
+        }
+
+        tableFormErrorEl.hidden = true;
+        labelInputEl.value = "";
+        priceInputEl.value = "0";
+        await loadTables();
       });
+    });
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        tableFormErrorEl.textContent = body.error || "Something went wrong. Try again.";
-        tableFormErrorEl.hidden = false;
-        return;
+    async function loadPlayerToken() {
+      const res = await fetch(`/admin/venues/${venueId}/player-token`);
+      const body = await res.json();
+      if (body.url) {
+        playerUrlEl.textContent = absoluteUrl(body.url);
+        playerUrlRowEl.hidden = false;
       }
+    }
 
-      tableFormErrorEl.hidden = true;
-      labelInputEl.value = "";
-      priceInputEl.value = "0";
-      await loadTables();
-    });
-
-    createPlayerButtonEl.addEventListener("click", async () => {
-      const res = await fetch(`/admin/venues/${venueId}/player-token`, { method: "POST" });
-      const body = await res.json();
-      playerUrlEl.textContent = absoluteUrl(body.url);
-      playerUrlRowEl.hidden = false;
-    });
+    createPlayerButtonEl.addEventListener("click", () =>
+      withBusy(createPlayerButtonEl, async () => {
+        const res = await fetch(`/admin/venues/${venueId}/player-token`, { method: "POST" });
+        const body = await res.json();
+        playerUrlEl.textContent = absoluteUrl(body.url);
+        playerUrlRowEl.hidden = false;
+      }),
+    );
 
     copyPlayerUrlEl.addEventListener("click", () => copyText(playerUrlEl.textContent, copyPlayerUrlEl));
 
@@ -478,11 +534,13 @@
       });
 
       playlistRowsEl.querySelectorAll("[data-remove-track-id]").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const trackId = btn.dataset.removeTrackId;
-          await fetch(`/admin/venues/${venueId}/playlist-tracks/${trackId}`, { method: "DELETE" });
-          await loadPlaylist();
-        });
+        btn.addEventListener("click", () =>
+          withBusy(btn, async () => {
+            const trackId = btn.dataset.removeTrackId;
+            await fetch(`/admin/venues/${venueId}/playlist-tracks/${trackId}`, { method: "DELETE" });
+            await loadPlaylist();
+          }),
+        );
       });
     }
 
@@ -501,9 +559,8 @@
       }
     });
 
-    playlistFormEl.addEventListener("submit", async (event) => {
+    playlistFormEl.addEventListener("submit", (event) => {
       event.preventDefault();
-      const title = playlistTitleInputEl.value.trim();
       const videoId = extractVideoId(playlistSongInputEl.value);
       if (!videoId) {
         playlistHintEl.textContent = "Doesn't look like a YouTube link or video ID.";
@@ -511,28 +568,33 @@
         return;
       }
 
-      const res = await fetch(`/admin/venues/${venueId}/playlist-tracks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, songRef: videoId }),
+      const submitButton = playlistFormEl.querySelector('button[type="submit"]');
+      withBusy(submitButton, async () => {
+        const title = playlistTitleInputEl.value.trim();
+        const res = await fetch(`/admin/venues/${venueId}/playlist-tracks`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, songRef: videoId }),
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          playlistHintEl.textContent = body.error || "Something went wrong. Try again.";
+          playlistHintEl.classList.add("error");
+          return;
+        }
+
+        playlistTitleInputEl.value = "";
+        playlistSongInputEl.value = "";
+        playlistHintEl.textContent = "";
+        playlistHintEl.classList.remove("error");
+        await loadPlaylist();
       });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        playlistHintEl.textContent = body.error || "Something went wrong. Try again.";
-        playlistHintEl.classList.add("error");
-        return;
-      }
-
-      playlistTitleInputEl.value = "";
-      playlistSongInputEl.value = "";
-      playlistHintEl.textContent = "";
-      playlistHintEl.classList.remove("error");
-      await loadPlaylist();
     });
 
     loadCurrency().then(loadTables);
     loadPlaylist();
+    loadPlayerToken();
   </script>
 </body>
 </html>

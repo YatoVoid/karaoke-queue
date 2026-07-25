@@ -1,17 +1,4 @@
-import { randomBytes } from "node:crypto";
-
-// Excludes 0/O/1/I/L so it's less likely to be misread on a TV screen.
-const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
-const CODE_LENGTH = 6;
-
-function generateShortCode() {
-  const bytes = randomBytes(CODE_LENGTH);
-  let code = "";
-  for (let i = 0; i < CODE_LENGTH; i++) {
-    code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
-  }
-  return code;
-}
+import { generateShortCode } from "./shortCode.js";
 
 export function createPlayerPairing(db, venueId) {
   let token;

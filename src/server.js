@@ -317,6 +317,15 @@ function buildRouter(db, getWss) {
     sendJson(res, 201, { token, url: `/player/${token}` });
   });
 
+  router.add("GET", "/admin/venues/:venueId/player-token", async (req, res, params) => {
+    const row = db
+      .prepare(
+        "SELECT token FROM player_tokens WHERE venue_id = ? ORDER BY created_at DESC LIMIT 1",
+      )
+      .get(params.venueId);
+    sendJson(res, 200, row ? { token: row.token, url: `/player/${row.token}` } : { token: null, url: null });
+  });
+
   router.add("GET", "/youtube.js", async (req, res) => {
     res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" });
     res.end(YOUTUBE_JS);

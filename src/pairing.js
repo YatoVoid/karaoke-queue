@@ -1,7 +1,15 @@
-import { randomUUID } from "node:crypto";
+import { generateShortCode } from "./shortCode.js";
+
+function tokenExists(db, token) {
+  return !!db.prepare("SELECT 1 FROM pairing_tokens WHERE token = ?").get(token);
+}
 
 export function createPairing(db, tableId) {
-  const token = randomUUID();
+  let token;
+  do {
+    token = generateShortCode();
+  } while (tokenExists(db, token));
+
   db.prepare(
     "INSERT INTO pairing_tokens (token, table_id, created_at) VALUES (?, ?, ?)",
   ).run(token, tableId, new Date().toISOString());
@@ -17,7 +25,7 @@ export function resolveToken(db, token) {
        FROM pairing_tokens
        JOIN tables ON tables.id = pairing_tokens.table_id
        LEFT JOIN venues ON venues.id = tables.venue_id
-       WHERE pairing_tokens.token = ?`,
+       WHERE pairing_tokens.token = ? COLLATE NOCASE`,
     )
     .get(token);
   return row ?? null;

@@ -18,7 +18,7 @@ test("createPairing then resolveToken returns the right table/venue", () => {
   const token = createPairing(db, "table-1");
   const resolved = resolveToken(db, token);
 
-  assert.ok(token.length > 10);
+  assert.equal(token.length, 6);
   assert.equal(resolved.tableId, "table-1");
   assert.equal(resolved.venueId, VENUE);
   assert.equal(resolved.kind, "private");
@@ -28,4 +28,13 @@ test("createPairing then resolveToken returns the right table/venue", () => {
 test("resolveToken returns null for an unknown token", () => {
   const db = openDatabase();
   assert.equal(resolveToken(db, "not-a-real-token"), null);
+});
+
+test("resolveToken is case-insensitive", () => {
+  const db = openDatabase();
+  seedTable(db, "table-1", "private");
+  const token = createPairing(db, "table-1");
+
+  const resolved = resolveToken(db, token.toLowerCase());
+  assert.equal(resolved.tableId, "table-1");
 });

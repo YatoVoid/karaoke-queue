@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0f1115" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
 <title>karaoke-queue</title>
 <style>
   :root {
@@ -89,10 +92,14 @@
     border-radius: 12px;
     border: none;
     cursor: pointer;
+    transition: transform 0.08s ease, filter 0.08s ease;
   }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: scale(0.97); filter: brightness(0.85); }
+  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   button.primary { background: var(--accent); color: #062024; }
   button.cancel { background: var(--danger); color: #2a0505; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
   .hint { font-size: 0.85rem; color: var(--text-dim); min-height: 1.2em; }
   .hint.error { color: var(--danger); }
   .song-preview {
@@ -130,6 +137,7 @@
       id="song-input"
       placeholder="Paste a YouTube link or video ID"
       autocomplete="off"
+      autofocus
     />
     <p class="hint" id="input-hint"></p>
     <div class="song-preview" id="song-preview" hidden>
@@ -278,6 +286,8 @@
       }
     });
 
+    const submitButtonEl = formEl.querySelector('button[type="submit"]');
+
     formEl.addEventListener("submit", async (event) => {
       event.preventDefault();
       const videoId = extractVideoId(inputEl.value);
@@ -287,40 +297,52 @@
         return;
       }
 
-      const res = await fetch(`/t/${token}/queue`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: inputEl.value.trim(), songRef: videoId }),
-      });
+      submitButtonEl.disabled = true;
+      submitButtonEl.textContent = "Requesting…";
+      try {
+        const res = await fetch(`/t/${token}/queue`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: inputEl.value.trim(), songRef: videoId }),
+        });
 
-      if (res.status === 409) {
-        hintEl.textContent = "This table already has a request in.";
-        hintEl.classList.add("error");
-        return;
-      }
-      if (!res.ok) {
-        hintEl.textContent = "Something went wrong. Try again.";
-        hintEl.classList.add("error");
-        return;
-      }
+        if (res.status === 409) {
+          hintEl.textContent = "This table already has a request in.";
+          hintEl.classList.add("error");
+          return;
+        }
+        if (!res.ok) {
+          hintEl.textContent = "Something went wrong. Try again.";
+          hintEl.classList.add("error");
+          return;
+        }
 
-      inputEl.value = "";
-      hintEl.textContent = "";
-      hintEl.classList.remove("error");
-      previewEl.hidden = true;
+        inputEl.value = "";
+        hintEl.textContent = "";
+        hintEl.classList.remove("error");
+        previewEl.hidden = true;
+      } finally {
+        submitButtonEl.disabled = false;
+        submitButtonEl.textContent = "Request this song";
+      }
     });
 
     cancelButtonEl.addEventListener("click", async () => {
       const entryId = cancelButtonEl.dataset.entryId;
-      if (cancelButtonEl.dataset.action === "skip") {
-        const res = await fetch(`/t/${token}/queue/${entryId}/skip`, { method: "POST" });
-        const body = await res.json();
-        mineStatusTextEl.textContent = body.billable
-          ? "Skipped. This still counts toward your bill."
-          : "Skipped. Not charged since you caught it early.";
-        return;
+      cancelButtonEl.disabled = true;
+      try {
+        if (cancelButtonEl.dataset.action === "skip") {
+          const res = await fetch(`/t/${token}/queue/${entryId}/skip`, { method: "POST" });
+          const body = await res.json();
+          mineStatusTextEl.textContent = body.billable
+            ? "Skipped. This still counts toward your bill."
+            : "Skipped. Not charged since you caught it early.";
+          return;
+        }
+        await fetch(`/t/${token}/queue/${entryId}`, { method: "DELETE" });
+      } finally {
+        cancelButtonEl.disabled = false;
       }
-      await fetch(`/t/${token}/queue/${entryId}`, { method: "DELETE" });
     });
 
     loadState();

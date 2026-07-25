@@ -983,6 +983,36 @@ async function createPlayerToken(port) {
   return (await res.json()).token;
 }
 
+test("GET /admin/venues/:venueId/player-token returns null when none exists yet", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/player-token`);
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.token, null);
+  assert.equal(body.url, null);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /admin/venues/:venueId/player-token returns the most recently created one", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  await createPlayerToken(port);
+  const secondToken = await createPlayerToken(port);
+
+  const res = await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/player-token`);
+  const body = await res.json();
+  assert.equal(body.token, secondToken);
+  assert.equal(body.url, `/player/${secondToken}`);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
 test("POST /player/:token/advance with nothing queued returns empty", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });

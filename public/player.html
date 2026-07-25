@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#05060a" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
 <title>karaoke-queue player</title>
 <style>
   :root { color-scheme: dark; }
@@ -46,9 +49,23 @@
     align-items: center;
   }
   ol#side-queue li .position { color: #6ee7ff; font-weight: 700; }
+  #connection-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #ff6e6e;
+    color: #2a0505;
+    font-weight: 700;
+    text-align: center;
+    padding: 6px;
+    font-size: 0.9rem;
+    z-index: 10;
+  }
 </style>
 </head>
 <body>
+  <div id="connection-banner" hidden>Reconnecting to the server…</div>
   <div id="player-column">
     <div id="idle-message" hidden>Waiting for requests...</div>
     <div id="yt-player-wrap" hidden><div id="yt-player"></div></div>
@@ -62,6 +79,7 @@
   <script src="https://www.youtube.com/iframe_api"></script>
   <script type="module">
     const token = location.pathname.split("/").filter(Boolean)[1];
+    const connectionBannerEl = document.getElementById("connection-banner");
     const ytWrapEl = document.getElementById("yt-player-wrap");
     const idleEl = document.getElementById("idle-message");
     const sideQueueEl = document.getElementById("side-queue");
@@ -186,6 +204,9 @@
     function connectSocket() {
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(`${proto}//${location.host}`);
+      ws.addEventListener("open", () => {
+        connectionBannerEl.hidden = true;
+      });
       ws.addEventListener("message", (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "queue-state") {
@@ -197,6 +218,7 @@
         }
       });
       ws.addEventListener("close", () => {
+        connectionBannerEl.hidden = false;
         setTimeout(connectSocket, 2000);
       });
     }
