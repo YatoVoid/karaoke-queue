@@ -480,6 +480,19 @@ function buildRouter(db, getWss) {
     sendJson(res, 200, result);
   });
 
+  // The video errored out (e.g. embedding blocked) instead of actually
+  // playing, so unlike a normal advance, this isn't billable.
+  router.add("POST", "/player/:token/error", async (req, res, params) => {
+    const resolved = resolvePlayerToken(db, params.token);
+    if (!resolved) {
+      return sendJson(res, 404, { error: "unknown player" });
+    }
+
+    const result = normalizeAdvanceResult(advance(db, resolved.venueId, { billable: false }));
+    broadcastToClients(getWss(), db, resolved.venueId, { skipTo: result });
+    sendJson(res, 200, result);
+  });
+
   return router;
 }
 

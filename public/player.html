@@ -61,23 +61,30 @@
     align-items: center;
   }
   ol#side-queue li .position { color: #6ee7ff; font-weight: 700; }
-  #connection-banner {
+  #banner-stack {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    background: #ff6e6e;
-    color: #2a0505;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+  }
+  #connection-banner, #skip-banner {
     font-weight: 700;
     text-align: center;
     padding: 6px;
     font-size: 0.9rem;
-    z-index: 10;
   }
+  #connection-banner { background: #ff6e6e; color: #2a0505; }
+  #skip-banner { background: #f5a623; color: #2a1c05; }
 </style>
 </head>
 <body>
-  <div id="connection-banner" hidden>Reconnecting to the server…</div>
+  <div id="banner-stack">
+    <div id="connection-banner" hidden>Reconnecting to the server…</div>
+    <div id="skip-banner" hidden>Skipped a video that can't play here — moving on…</div>
+  </div>
   <div id="player-column">
     <div id="idle-message" hidden>Waiting for requests...</div>
     <div id="yt-player-wrap" hidden><div id="yt-player"></div></div>
@@ -92,6 +99,8 @@
   <script type="module">
     const token = location.pathname.split("/").filter(Boolean)[1];
     const connectionBannerEl = document.getElementById("connection-banner");
+    const skipBannerEl = document.getElementById("skip-banner");
+    let skipBannerTimeout = null;
     const ytWrapEl = document.getElementById("yt-player-wrap");
     const idleEl = document.getElementById("idle-message");
     const sideQueueEl = document.getElementById("side-queue");
@@ -130,7 +139,12 @@
     };
 
     async function onPlayerError() {
-      await advance();
+      skipBannerEl.hidden = false;
+      clearTimeout(skipBannerTimeout);
+      skipBannerTimeout = setTimeout(() => {
+        skipBannerEl.hidden = true;
+      }, 5000);
+      await advanceAfterError();
     }
 
     function playVideo(videoId, { background = false } = {}) {
@@ -198,6 +212,11 @@
 
     async function advance() {
       const res = await fetch(`/player/${token}/advance`, { method: "POST" });
+      applyAdvanceResult(await res.json());
+    }
+
+    async function advanceAfterError() {
+      const res = await fetch(`/player/${token}/error`, { method: "POST" });
       applyAdvanceResult(await res.json());
     }
 

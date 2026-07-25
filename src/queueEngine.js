@@ -100,10 +100,11 @@ function nextPlaylistTrack(db, venueId) {
   return tracks[index];
 }
 
-export function advance(db, venueId) {
+export function advance(db, venueId, { billable = true } = {}) {
   const current = nowPlaying(db, venueId);
   if (current) {
-    db.prepare("UPDATE queue_entries SET status = 'done', ended_at = ? WHERE id = ?").run(
+    db.prepare("UPDATE queue_entries SET status = ?, ended_at = ? WHERE id = ?").run(
+      billable ? "done" : "cancelled",
       new Date().toISOString(),
       current.id,
     );

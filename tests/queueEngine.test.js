@@ -139,6 +139,18 @@ test("advance marks the previously playing entry done before promoting the next"
   assert.equal(firstRow.status, "done");
 });
 
+test("advance with billable:false marks the previously playing entry cancelled, not done", () => {
+  const db = freshDb();
+  const first = enqueue(db, { venueId: VENUE, tableId: "table-1", songTitle: "A", songRef: "yt:a" });
+  enqueue(db, { venueId: VENUE, tableId: "table-2", songTitle: "B", songRef: "yt:b" });
+
+  advance(db, VENUE); // first -> playing
+  advance(db, VENUE, { billable: false }); // first -> cancelled (e.g. playback error), second -> playing
+
+  const firstRow = db.prepare("SELECT status FROM queue_entries WHERE id = ?").get(first.id);
+  assert.equal(firstRow.status, "cancelled");
+});
+
 test("skipPlaying within the grace window marks the entry cancelled, not billable", () => {
   const db = freshDb();
   const entry = enqueue(db, { venueId: VENUE, tableId: "table-1", songTitle: "A", songRef: "yt:a" });

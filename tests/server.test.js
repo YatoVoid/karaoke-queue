@@ -1087,6 +1087,51 @@ test("POST /player/:token/advance promotes the next queued request once the curr
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
 
+test("POST /player/:token/error advances but doesn't bill the table for the failed video", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const playerToken = await createPlayerToken(port);
+  const { tableId, token } = await createAndPairTable(port, "Table 1", "public", 2);
+
+  // Idle venue, so this auto-starts playing.
+  await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Unplayable Song", songRef: "aaaaaaaaaaa" }),
+  });
+
+  const errorRes = await fetch(`http://127.0.0.1:${port}/player/${playerToken}/error`, {
+    method: "POST",
+  });
+  const errorBody = await errorRes.json();
+  assert.equal(errorRes.status, 200);
+  assert.equal(errorBody.type, "empty");
+
+  const list = await (
+    await fetch(`http://127.0.0.1:${port}/admin/venues/${VENUE}/tables`)
+  ).json();
+  const row = list.find((t) => t.id === tableId);
+  assert.equal(row.billableCount, 0);
+
+  const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
+  assert.equal(state.nowPlaying, null);
+  assert.equal(state.queued.length, 0);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /player/:token/error 404s for an unknown token", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(`http://127.0.0.1:${port}/player/nope/error`, { method: "POST" });
+  assert.equal(res.status, 404);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
 test("a second advance with nothing behind it marks the entry done and returns empty", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });
