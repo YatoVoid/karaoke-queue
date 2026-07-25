@@ -261,10 +261,15 @@
       previewTitleEl.textContent = "Loading title…";
       previewEl.hidden = false;
 
-      const res = await fetch(`/t/${token}/preview?videoId=${videoId}`);
-      const body = await res.json().catch(() => ({}));
-      if (requestId !== previewRequestId) return; // input changed since; stale response
-      previewTitleEl.textContent = body.title || "Title unavailable, but this will still queue.";
+      try {
+        const res = await fetch(`/t/${token}/preview?videoId=${videoId}`);
+        const body = await res.json().catch(() => ({}));
+        if (requestId !== previewRequestId) return; // input changed since; stale response
+        previewTitleEl.textContent = body.title || "Couldn't find a title for this video.";
+      } catch {
+        if (requestId !== previewRequestId) return;
+        previewTitleEl.textContent = "Couldn't load a preview — check your connection.";
+      }
     }
 
     inputEl.addEventListener("input", () => {
@@ -300,11 +305,18 @@
       submitButtonEl.disabled = true;
       submitButtonEl.textContent = "Requesting…";
       try {
-        const res = await fetch(`/t/${token}/queue`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: inputEl.value.trim(), songRef: videoId }),
-        });
+        let res;
+        try {
+          res = await fetch(`/t/${token}/queue`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: inputEl.value.trim(), songRef: videoId }),
+          });
+        } catch {
+          hintEl.textContent = "Couldn't reach the server. Check your connection and try again.";
+          hintEl.classList.add("error");
+          return;
+        }
 
         if (res.status === 409) {
           hintEl.textContent = "This table already has a request in.";
@@ -312,7 +324,8 @@
           return;
         }
         if (!res.ok) {
-          hintEl.textContent = "Something went wrong. Try again.";
+          const body = await res.json().catch(() => ({}));
+          hintEl.textContent = body.error || "Something went wrong. Try again.";
           hintEl.classList.add("error");
           return;
         }
