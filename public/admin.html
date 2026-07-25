@@ -56,6 +56,8 @@
   button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   button.small { padding: 8px 14px; font-size: 0.9rem; min-height: 40px; }
   .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+  .url-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .url-row code { flex: 1; min-width: 0; }
   .hint { font-size: 0.85rem; color: #9aa3b2; min-height: 1.2em; margin: 0; }
   .hint.error { color: #ff6e6e; }
   #playlist-rows li {
@@ -155,7 +157,10 @@
   <h2>Player</h2>
   <div class="panel">
     <button id="create-player-button">Create player token</button>
-    <p id="player-url" hidden></p>
+    <div class="url-row" id="player-url-row" hidden>
+      <code id="player-url"></code>
+      <button class="small" id="copy-player-url" type="button">Copy</button>
+    </div>
   </div>
 
   <h2>Background playlist</h2>
@@ -207,7 +212,9 @@
     const priceFieldEl = document.getElementById("price-field");
     const priceInputEl = document.getElementById("price-input");
     const createPlayerButtonEl = document.getElementById("create-player-button");
+    const playerUrlRowEl = document.getElementById("player-url-row");
     const playerUrlEl = document.getElementById("player-url");
+    const copyPlayerUrlEl = document.getElementById("copy-player-url");
     const playlistRowsEl = document.getElementById("playlist-rows");
     const noPlaylistTracksEl = document.getElementById("no-playlist-tracks");
     const playlistFormEl = document.getElementById("playlist-form");
@@ -219,6 +226,43 @@
       const div = document.createElement("div");
       div.textContent = str;
       return div.innerHTML;
+    }
+
+    function absoluteUrl(path) {
+      return `${location.origin}${path}`;
+    }
+
+    async function copyText(text, buttonEl) {
+      let copied = false;
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        } catch {
+          copied = false;
+        }
+      }
+      if (!copied) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          document.execCommand("copy");
+          copied = true;
+        } catch {
+          copied = false;
+        }
+        document.body.removeChild(textarea);
+      }
+
+      const original = buttonEl.textContent;
+      buttonEl.textContent = copied ? "Copied!" : "Copy failed";
+      setTimeout(() => {
+        buttonEl.textContent = original;
+      }, 1500);
     }
 
     function syncPriceFieldVisibility() {
@@ -247,10 +291,14 @@
             ? `${t.billableCount} (${currencySymbol}${t.billableCount * t.pricePerUse})`
             : String(t.billableCount);
         const pairingCell = t.pairingUrl
-          ? `<code>${escapeHtml(t.pairingUrl)}</code>`
+          ? `<div class="url-row"><code>${escapeHtml(t.pairingUrl)}</code><button class="small" data-copy-url="${escapeHtml(absoluteUrl(t.pairingUrl))}" type="button">Copy</button></div>`
           : `<button class="small" data-pair-table-id="${t.id}">Pair</button>`;
         tr.innerHTML = `<td data-label="Label">${escapeHtml(t.label)}</td><td data-label="Kind">${t.kind}</td><td data-label="Price">${priceText}</td><td data-label="Billed">${billedText}</td><td data-label="Pairing">${pairingCell}</td><td data-label="Actions"><div class="btn-group"><button class="small" data-edit-table-id="${t.id}" data-label="${escapeHtml(t.label)}" data-kind="${t.kind}" data-price="${t.pricePerUse}">Edit</button><button class="small" data-delete-table-id="${t.id}" data-label="${escapeHtml(t.label)}">Delete</button></div></td>`;
         tableRowsEl.appendChild(tr);
+      });
+
+      tableRowsEl.querySelectorAll("[data-copy-url]").forEach((btn) => {
+        btn.addEventListener("click", () => copyText(btn.dataset.copyUrl, btn));
       });
 
       tableRowsEl.querySelectorAll("[data-pair-table-id]").forEach((btn) => {
@@ -410,9 +458,11 @@
     createPlayerButtonEl.addEventListener("click", async () => {
       const res = await fetch(`/admin/venues/${venueId}/player-token`, { method: "POST" });
       const body = await res.json();
-      playerUrlEl.textContent = body.url;
-      playerUrlEl.hidden = false;
+      playerUrlEl.textContent = absoluteUrl(body.url);
+      playerUrlRowEl.hidden = false;
     });
+
+    copyPlayerUrlEl.addEventListener("click", () => copyText(playerUrlEl.textContent, copyPlayerUrlEl));
 
     async function loadPlaylist() {
       const res = await fetch(`/admin/venues/${venueId}/playlist-tracks`);

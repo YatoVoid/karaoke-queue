@@ -8,7 +8,22 @@ test("createPlayerPairing then resolvePlayerToken returns the right venue", () =
   const token = createPlayerPairing(db, "venue-1");
   const resolved = resolvePlayerToken(db, token);
 
-  assert.ok(token.length > 10);
+  assert.equal(token.length, 6);
+  assert.equal(resolved.venueId, "venue-1");
+});
+
+test("createPlayerPairing tokens are typeable on a TV remote (no ambiguous characters)", () => {
+  const db = openDatabase();
+  const token = createPlayerPairing(db, "venue-1");
+
+  assert.match(token, /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]+$/);
+});
+
+test("resolvePlayerToken is case-insensitive", () => {
+  const db = openDatabase();
+  const token = createPlayerPairing(db, "venue-1");
+  const resolved = resolvePlayerToken(db, token.toLowerCase());
+
   assert.equal(resolved.venueId, "venue-1");
 });
 
