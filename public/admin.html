@@ -49,7 +49,11 @@
     cursor: pointer;
     background: #6ee7ff;
     color: #062024;
+    transition: transform 0.08s ease, filter 0.08s ease;
   }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: scale(0.96); filter: brightness(0.85); }
+  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   button.small { padding: 8px 14px; font-size: 0.9rem; min-height: 40px; }
   .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
   .hint { font-size: 0.85rem; color: #9aa3b2; min-height: 1.2em; margin: 0; }
@@ -104,8 +108,8 @@
   <div class="panel">
     <form id="currency-form">
       <div class="field">
-        <label>Symbol shown on every price (e.g. $, &#8380;, AZN)</label>
-        <input type="text" id="currency-input" placeholder="$" />
+        <label>Currency</label>
+        <select id="currency-input"></select>
       </div>
       <button type="submit">Save currency</button>
     </form>
@@ -306,10 +310,63 @@
       });
     }
 
+    const FALLBACK_CURRENCY_CODES = [
+      "USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "CNY", "INR", "BRL",
+      "MXN", "AZN", "TRY", "RUB", "KRW", "SEK", "NOK", "DKK", "PLN", "THB",
+      "ZAR", "AED", "SAR", "SGD", "HKD", "NZD", "ILS", "PHP", "IDR", "VND",
+    ];
+
+    function currencyCodes() {
+      if (typeof Intl.supportedValuesOf === "function") {
+        try {
+          return Intl.supportedValuesOf("currency");
+        } catch {
+          // Older engine; fall through to the fallback list.
+        }
+      }
+      return FALLBACK_CURRENCY_CODES;
+    }
+
+    function symbolForCurrency(code) {
+      try {
+        const parts = new Intl.NumberFormat("en", {
+          style: "currency",
+          currency: code,
+          currencyDisplay: "symbol",
+        }).formatToParts(0);
+        return parts.find((p) => p.type === "currency")?.value ?? code;
+      } catch {
+        return code;
+      }
+    }
+
+    function populateCurrencyOptions() {
+      currencyInputEl.innerHTML = "";
+      currencyCodes().forEach((code) => {
+        const symbol = symbolForCurrency(code);
+        const option = document.createElement("option");
+        option.value = symbol;
+        option.textContent = `${code} (${symbol})`;
+        currencyInputEl.appendChild(option);
+      });
+    }
+
     async function loadCurrency() {
+      populateCurrencyOptions();
+
       const res = await fetch(`/admin/venues/${venueId}/currency`);
       const body = await res.json();
-      currencySymbol = body.currencySymbol;
+      currencySymbol = body.currencySymbol || symbolForCurrency("USD");
+
+      const hasMatch = Array.from(currencyInputEl.options).some(
+        (option) => option.value === currencySymbol,
+      );
+      if (!hasMatch) {
+        const custom = document.createElement("option");
+        custom.value = currencySymbol;
+        custom.textContent = `Current (${currencySymbol})`;
+        currencyInputEl.prepend(custom);
+      }
       currencyInputEl.value = currencySymbol;
     }
 

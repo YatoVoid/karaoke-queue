@@ -69,7 +69,10 @@
 
     let ytPlayer = null;
     let ytReady = false;
-    let pendingVideoId = null;
+    let pendingVideo = null;
+    let currentVideoId = null;
+    let currentIsBackground = false;
+    const backgroundResumeAt = new Map();
 
     function escapeHtml(str) {
       const div = document.createElement("div");
@@ -84,9 +87,9 @@
         events: {
           onReady: () => {
             ytReady = true;
-            if (pendingVideoId) {
-              ytPlayer.loadVideoById(pendingVideoId);
-              pendingVideoId = null;
+            if (pendingVideo) {
+              ytPlayer.loadVideoById(pendingVideo);
+              pendingVideo = null;
             }
           },
           onStateChange: onPlayerStateChange,
@@ -100,13 +103,23 @@
       await advance();
     }
 
-    function playVideo(videoId) {
+    function playVideo(videoId, { background = false } = {}) {
       idleEl.hidden = true;
       ytWrapEl.hidden = false;
+
+      // Leaving a background track mid-play; remember where to pick it back up.
+      if (currentIsBackground && currentVideoId && ytReady) {
+        backgroundResumeAt.set(currentVideoId, ytPlayer.getCurrentTime());
+      }
+
+      const startSeconds = background ? (backgroundResumeAt.get(videoId) ?? 0) : 0;
+      currentVideoId = videoId;
+      currentIsBackground = background;
+
       if (ytReady) {
-        ytPlayer.loadVideoById(videoId);
+        ytPlayer.loadVideoById({ videoId, startSeconds });
       } else {
-        pendingVideoId = videoId;
+        pendingVideo = { videoId, startSeconds };
       }
     }
 
@@ -147,7 +160,7 @@
       if (result.type === "request") {
         playVideo(result.entry.songRef);
       } else if (result.type === "playlist") {
-        playVideo(result.track.song_ref);
+        playVideo(result.track.song_ref, { background: true });
       } else {
         showIdle();
       }

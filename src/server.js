@@ -387,8 +387,30 @@ function buildRouter(db, getWss) {
       throw err;
     }
 
-    broadcastToClients(getWss(), db, resolved.venueId);
+    // Background music isn't a queue_entries row, so this covers that case too.
+    if (!nowPlaying(db, resolved.venueId)) {
+      const advanceResult = normalizeAdvanceResult(advance(db, resolved.venueId));
+      broadcastToClients(getWss(), db, resolved.venueId, { skipTo: advanceResult });
+    } else {
+      broadcastToClients(getWss(), db, resolved.venueId);
+    }
     sendJson(res, 201, entry);
+  });
+
+  router.add("GET", "/t/:token/preview", async (req, res, params) => {
+    const resolved = resolveToken(db, params.token);
+    if (!resolved) {
+      return sendJson(res, 404, { error: "unknown table" });
+    }
+
+    const query = new URL(req.url, "http://internal").searchParams;
+    const videoId = extractVideoId(query.get("videoId") ?? "");
+    if (!videoId) {
+      return sendJson(res, 400, { error: "videoId must be a valid YouTube link or video ID" });
+    }
+
+    const title = await fetchOembedTitle(videoId);
+    sendJson(res, 200, { videoId, title });
   });
 
   router.add("DELETE", "/t/:token/queue/:entryId", async (req, res, params) => {

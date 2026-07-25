@@ -598,6 +598,67 @@ test("GET /youtube.js serves the video-ID extractor as JS", async () => {
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
 
+// Real network call, not a mock.
+test("GET /t/:token/preview returns the real title for a valid video", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  const res = await fetch(
+    `http://127.0.0.1:${port}/t/${token}/preview?videoId=jNQXAC9IVRw`,
+  );
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.videoId, "jNQXAC9IVRw");
+  assert.equal(body.title, "Me at the zoo");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /t/:token/preview extracts the video ID from a full URL", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  const res = await fetch(
+    `http://127.0.0.1:${port}/t/${token}/preview?videoId=${encodeURIComponent("https://www.youtube.com/watch?v=jNQXAC9IVRw")}`,
+  );
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.videoId, "jNQXAC9IVRw");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /t/:token/preview 400s for an invalid videoId", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  const res = await fetch(
+    `http://127.0.0.1:${port}/t/${token}/preview?videoId=${encodeURIComponent("this is not a video link")}`,
+  );
+  assert.equal(res.status, 400);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("GET /t/:token/preview 404s for an unknown token", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+
+  const res = await fetch(
+    `http://127.0.0.1:${port}/t/not-a-real-token/preview?videoId=aaaaaaaaaaa`,
+  );
+  assert.equal(res.status, 404);
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
 test("POST /t/:token/queue enqueues, and GET /t/:token/state reflects it", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });
@@ -613,8 +674,8 @@ test("POST /t/:token/queue enqueues, and GET /t/:token/state reflects it", async
 
   const stateRes = await fetch(`http://127.0.0.1:${port}/t/${token}/state`);
   const state = await stateRes.json();
-  assert.equal(state.queued.length, 1);
-  assert.equal(state.queued[0].songTitle, "Song A");
+  assert.equal(state.queued.length, 0);
+  assert.equal(state.nowPlaying.songTitle, "Song A");
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
@@ -654,7 +715,7 @@ test("POST /t/:token/queue stores the extracted bare video ID, not the full past
   });
 
   const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
-  assert.equal(state.queued[0].songRef, "aaaaaaaaaaa");
+  assert.equal(state.nowPlaying.songRef, "aaaaaaaaaaa");
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
@@ -676,7 +737,7 @@ test("POST /t/:token/queue uses the real YouTube title over a wrong client-suppl
   });
 
   const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
-  assert.equal(state.queued[0].songTitle, "Me at the zoo");
+  assert.equal(state.nowPlaying.songTitle, "Me at the zoo");
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
@@ -687,14 +748,12 @@ test("GET /t/:token/state returns nowPlaying in camelCase, matching the enqueue 
   const port = await listen(httpServer);
   const { tableId, token } = await createAndPairTable(port);
 
+  // Idle venue, so this auto-starts playing.
   await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title: "Song A", songRef: "aaaaaaaaaaa" }),
   });
-  // Move the entry into 'playing' directly.
-  const { advance } = await import("../src/queueEngine.js");
-  advance(db, VENUE);
 
   const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
   assert.equal(state.nowPlaying.songTitle, "Song A");
@@ -725,7 +784,8 @@ test("POST /t/:token/queue rejects a second active request with 409", async () =
   assert.equal(secondRes.status, 409);
 
   const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
-  assert.equal(state.queued.length, 1);
+  assert.equal(state.queued.length, 0);
+  assert.equal(state.nowPlaying.songTitle, "Song A");
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
@@ -734,7 +794,15 @@ test("DELETE /t/:token/queue/:entryId cancels the table's own entry", async () =
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });
   const port = await listen(httpServer);
+  const filler = await createAndPairTable(port, "Filler Table");
   const { token } = await createAndPairTable(port);
+
+  // Something already playing, so this entry stays queued instead of auto-starting.
+  await fetch(`http://127.0.0.1:${port}/t/${filler.token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Filler Song", songRef: "ffffffffff0" }),
+  });
 
   const entry = await (
     await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
@@ -760,8 +828,16 @@ test("a table's token cannot cancel a different table's entry (impersonation)", 
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });
   const port = await listen(httpServer);
+  const filler = await createAndPairTable(port, "Filler Table");
   const tableA = await createAndPairTable(port, "Table A");
   const tableB = await createAndPairTable(port, "Table B");
+
+  // Something already playing, so A's entry stays queued instead of auto-starting.
+  await fetch(`http://127.0.0.1:${port}/t/${filler.token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Filler Song", songRef: "ffffffffff0" }),
+  });
 
   const entryA = await (
     await fetch(`http://127.0.0.1:${port}/t/${tableA.token}/queue`, {
@@ -892,7 +968,10 @@ test("one table already having an active entry does not block a different table'
   assert.equal(bRes.status, 201);
 
   const stateB = await (await fetch(`http://127.0.0.1:${port}/t/${tableB.token}/state`)).json();
-  assert.equal(stateB.queued.length, 2); // both A's and B's entries are venue-wide visible
+  // A's entry auto-started (nothing was playing); B's stays queued behind it, venue-wide visible.
+  assert.equal(stateB.nowPlaying.songTitle, "A's Song");
+  assert.equal(stateB.queued.length, 1);
+  assert.equal(stateB.queued[0].songTitle, "B's Song");
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
@@ -920,7 +999,7 @@ test("POST /player/:token/advance with nothing queued returns empty", async () =
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
 
-test("POST /player/:token/advance promotes a queued request, GET .../state reflects it", async () => {
+test("queueing while idle starts playback immediately, without waiting for /advance", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });
   const port = await listen(httpServer);
@@ -933,18 +1012,47 @@ test("POST /player/:token/advance promotes a queued request, GET .../state refle
     body: JSON.stringify({ title: "Song A", songRef: "aaaaaaaaaaa" }),
   });
 
+  const state = await (
+    await fetch(`http://127.0.0.1:${port}/player/${playerToken}/state`)
+  ).json();
+  assert.equal(state.nowPlaying.songTitle, "Song A");
+  assert.equal(state.nowPlaying.status, "playing");
+
+  await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
+});
+
+test("POST /player/:token/advance promotes the next queued request once the current one ends", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const playerToken = await createPlayerToken(port);
+  const tableA = await createAndPairTable(port);
+  const tableB = await createAndPairTable(port);
+
+  await fetch(`http://127.0.0.1:${port}/t/${tableA.token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Song A", songRef: "aaaaaaaaaaa" }),
+  });
+  // Song A is already playing (idle-start), so Song B stays queued behind it.
+  await fetch(`http://127.0.0.1:${port}/t/${tableB.token}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Song B", songRef: "bbbbbbbbbbb" }),
+  });
+
   const advanceRes = await fetch(`http://127.0.0.1:${port}/player/${playerToken}/advance`, {
     method: "POST",
   });
   const advanceBody = await advanceRes.json();
   assert.equal(advanceBody.type, "request");
-  assert.equal(advanceBody.entry.songTitle, "Song A");
+  assert.equal(advanceBody.entry.songTitle, "Song B");
   assert.equal(advanceBody.entry.status, "playing");
 
   const state = await (
     await fetch(`http://127.0.0.1:${port}/player/${playerToken}/state`)
   ).json();
-  assert.equal(state.nowPlaying.songTitle, "Song A");
+  assert.equal(state.nowPlaying.songTitle, "Song B");
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });
@@ -1175,7 +1283,7 @@ test("a Cyrillic song title survives the full round trip when oEmbed can't overr
   });
 
   const state = await (await fetch(`http://127.0.0.1:${port}/t/${token}/state`)).json();
-  assert.equal(state.queued[0].songTitle, title);
+  assert.equal(state.nowPlaying.songTitle, title);
 
   await new Promise((resolve) => wss.close(() => httpServer.close(resolve)));
 });

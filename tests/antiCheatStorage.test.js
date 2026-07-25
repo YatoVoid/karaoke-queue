@@ -34,6 +34,14 @@ test("a fresh, storage-free request to the same table URL cannot bypass the one-
   const port = await listen(httpServer);
   const token = await pairTable(port);
 
+  // Something already playing, so this table's entry stays queued instead of auto-starting.
+  const filler = await pairTable(port);
+  await fetch(`http://127.0.0.1:${port}/t/${filler}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Filler Song", songRef: "ffffffffff0" }),
+  });
+
   // Original guest submits a request.
   const firstRes = await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {
     method: "POST",
@@ -62,6 +70,14 @@ test("after the active request is cancelled, the same table URL can request agai
   const { httpServer, wss } = createServer({ db });
   const port = await listen(httpServer);
   const token = await pairTable(port);
+
+  // Something already playing, so this table's entry stays queued (and thus cancellable).
+  const filler = await pairTable(port);
+  await fetch(`http://127.0.0.1:${port}/t/${filler}/queue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Filler Song", songRef: "ffffffffff0" }),
+  });
 
   const first = await (
     await fetch(`http://127.0.0.1:${port}/t/${token}/queue`, {

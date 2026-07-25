@@ -95,6 +95,16 @@
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   .hint { font-size: 0.85rem; color: var(--text-dim); min-height: 1.2em; }
   .hint.error { color: var(--danger); }
+  .song-preview {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 8px 10px;
+  }
+  .song-preview img { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+  .song-preview span { font-size: 0.9rem; }
 </style>
 </head>
 <body>
@@ -122,6 +132,10 @@
       autocomplete="off"
     />
     <p class="hint" id="input-hint"></p>
+    <div class="song-preview" id="song-preview" hidden>
+      <img id="preview-thumb" alt="" />
+      <span id="preview-title"></span>
+    </div>
     <button type="submit" class="primary">Request this song</button>
   </form>
 
@@ -139,6 +153,11 @@
     const hintEl = document.getElementById("input-hint");
     const cancelButtonEl = document.getElementById("cancel-button");
     const mineStatusTextEl = document.getElementById("mine-status-text");
+    const previewEl = document.getElementById("song-preview");
+    const previewThumbEl = document.getElementById("preview-thumb");
+    const previewTitleEl = document.getElementById("preview-title");
+
+    let previewRequestId = 0;
 
     let myTableId = null;
     let myPricePerUse = null;
@@ -228,18 +247,34 @@
       });
     }
 
+    async function showPreview(videoId) {
+      const requestId = ++previewRequestId;
+      previewThumbEl.src = thumbnailUrl(videoId);
+      previewTitleEl.textContent = "Loading title…";
+      previewEl.hidden = false;
+
+      const res = await fetch(`/t/${token}/preview?videoId=${videoId}`);
+      const body = await res.json().catch(() => ({}));
+      if (requestId !== previewRequestId) return; // input changed since; stale response
+      previewTitleEl.textContent = body.title || "Title unavailable, but this will still queue.";
+    }
+
     inputEl.addEventListener("input", () => {
       if (!inputEl.value.trim()) {
         hintEl.textContent = "";
         hintEl.classList.remove("error");
+        previewEl.hidden = true;
         return;
       }
-      if (extractVideoId(inputEl.value)) {
+      const videoId = extractVideoId(inputEl.value);
+      if (videoId) {
         hintEl.textContent = "Looks good.";
         hintEl.classList.remove("error");
+        showPreview(videoId);
       } else {
         hintEl.textContent = "Doesn't look like a YouTube link or video ID.";
         hintEl.classList.add("error");
+        previewEl.hidden = true;
       }
     });
 
@@ -272,6 +307,7 @@
       inputEl.value = "";
       hintEl.textContent = "";
       hintEl.classList.remove("error");
+      previewEl.hidden = true;
     });
 
     cancelButtonEl.addEventListener("click", async () => {
