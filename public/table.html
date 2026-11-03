@@ -3,115 +3,107 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#0f1115" />
+<meta name="theme-color" content="#ffffff" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <title>karaoke-queue</title>
 <style>
   :root {
-    color-scheme: dark;
-    --bg: #0f1115;
-    --panel: #1a1d24;
-    --accent: #6ee7ff;
-    --text: #e8ecf1;
-    --text-dim: #9aa3b2;
-    --danger: #ff6e6e;
+    color-scheme: light;
+    --paper: #ffffff;
+    --ink: #111111;
+    --ink-2: #4a4a4a;
+    --rule: #d9d9d9;
+    --red: #c8102e;
+    --red-dark: #9e0c24;
+    --stand-in: #e6e6e6;
   }
   * { box-sizing: border-box; }
-  /* Beats any element-specific display rule below. */
   [hidden] { display: none !important; }
   body {
     margin: 0;
     min-height: 100vh;
-    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    padding: 24px 16px 48px;
-    /* Caps width on large displays. */
+    font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    padding: 20px 18px 48px;
     max-width: 720px;
     margin-inline: auto;
+    font-variant-numeric: tabular-nums;
   }
-  h2 { font-size: 1.1rem; color: var(--text-dim); font-weight: 600; margin: 0 0 4px; }
-  .now-playing {
-    background: var(--panel);
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 20px;
+  h2 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0 0 6px;
+    padding-bottom: 6px;
+    border-bottom: 3px solid var(--ink);
   }
-  .now-playing .title { font-size: 1.4rem; font-weight: 700; }
-  .now-playing .empty { color: var(--text-dim); }
-  ol#queue-list {
-    list-style: none;
-    margin: 0 0 24px;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  .thumb {
+    background: var(--stand-in);
+    object-fit: cover;
+    flex-shrink: 0;
+    display: block;
   }
+  .now-playing { padding: 14px 0 22px; }
+  .now-playing .title-row { display: flex; align-items: center; gap: 14px; }
+  .now-playing .thumb { width: 112px; height: 84px; }
+  .now-playing .title { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+  .now-playing .empty { color: var(--ink-2); }
+  ol#queue-list { list-style: none; margin: 0 0 20px; padding: 0; }
   ol#queue-list li {
-    background: var(--panel);
-    border-radius: 12px;
-    padding: 14px 16px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--rule);
   }
-  ol#queue-list li img {
-    width: 64px;
-    height: 48px;
-    object-fit: cover;
-    border-radius: 8px;
-    flex-shrink: 0;
-  }
-  .now-playing .title-row { display: flex; align-items: center; gap: 12px; }
-  .now-playing img { width: 96px; height: 72px; object-fit: cover; border-radius: 10px; }
-  ol#queue-list li.mine { outline: 2px solid var(--accent); }
+  ol#queue-list li .thumb { width: 64px; height: 48px; }
   .position {
     font-weight: 700;
-    color: var(--accent);
-    min-width: 1.5em;
+    font-size: 1.3rem;
+    min-width: 2.2rem;
+    text-align: center;
   }
-  #empty-queue { color: var(--text-dim); font-style: italic; }
-  form#request-form {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
+  ol#queue-list li.mine .position { background: var(--red); color: #fff; padding: 2px 0; }
+  .yours { margin-inline-start: auto; color: var(--red); font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+  #empty-queue { color: var(--ink-2); padding: 8px 0 20px; margin: 0; }
+  #mine-panel { padding: 14px 16px; border: 2px solid var(--red); margin-bottom: 16px; }
+  #mine-panel p { margin: 0 0 12px; font-weight: 700; }
+  form#request-form { display: flex; flex-direction: column; gap: 10px; }
   input[type="text"] {
-    font-size: 1rem;
+    font: inherit;
+    font-size: 1.05rem;
     padding: 14px;
-    border-radius: 12px;
-    border: 1px solid #333;
-    background: #0b0d11;
-    color: var(--text);
+    border: 2px solid var(--ink);
+    border-radius: 0;
+    background: var(--paper);
+    color: var(--ink);
   }
   button {
-    font-size: 1rem;
+    font: inherit;
+    font-size: 1.05rem;
     font-weight: 700;
     padding: 14px;
-    border-radius: 12px;
-    border: none;
+    min-height: 48px;
+    border-radius: 0;
     cursor: pointer;
-    transition: transform 0.08s ease, filter 0.08s ease;
   }
-  button:hover { filter: brightness(1.08); }
-  button:active { transform: scale(0.97); filter: brightness(0.85); }
-  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  button.primary { background: var(--accent); color: #062024; }
-  button.cancel { background: var(--danger); color: #2a0505; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-  .hint { font-size: 0.85rem; color: var(--text-dim); min-height: 1.2em; }
-  .hint.error { color: var(--danger); }
-  .song-preview {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: var(--panel);
-    border-radius: 12px;
-    padding: 8px 10px;
-  }
-  .song-preview img { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
-  .song-preview span { font-size: 0.9rem; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+  button.primary { background: var(--ink); color: #fff; border: 2px solid var(--ink); }
+  button.primary:hover { background: #333; }
+  button.cancel { background: var(--paper); color: var(--red); border: 2px solid var(--red); }
+  button.cancel:hover { background: #fdf1f3; }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+  .hint { font-size: 0.9rem; color: var(--ink-2); min-height: 1.2em; margin: 0; }
+  .hint.error { color: var(--red); }
+  .song-preview { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+  .song-preview .thumb { width: 64px; height: 48px; }
+  .song-preview span { font-weight: 700; }
+  #status-line { font-weight: 700; margin: 0 0 14px; }
+  #price-line { margin: 0 0 18px; }
+  form#request-form h2 { margin-bottom: 4px; }
+  @media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
 </style>
 </head>
 <body>
@@ -124,6 +116,8 @@
   <ol id="queue-list"></ol>
   <p id="empty-queue" hidden>No one is waiting in line.</p>
 
+  <p id="status-line" hidden></p>
+
   <div id="mine-panel" hidden>
     <p id="mine-status-text">Your song is in the queue.</p>
     <button class="cancel" id="cancel-button">Cancel my request</button>
@@ -132,6 +126,7 @@
   <p class="hint" id="price-line" hidden></p>
 
   <form id="request-form">
+    <h2><label for="song-input">Request a song</label></h2>
     <input
       type="text"
       id="song-input"
@@ -141,7 +136,7 @@
     />
     <p class="hint" id="input-hint"></p>
     <div class="song-preview" id="song-preview" hidden>
-      <img id="preview-thumb" alt="" />
+      <img class="thumb" id="preview-thumb" alt="" />
       <span id="preview-title"></span>
     </div>
     <button type="submit" class="primary">Request this song</button>
@@ -164,6 +159,20 @@
     const previewEl = document.getElementById("song-preview");
     const previewThumbEl = document.getElementById("preview-thumb");
     const previewTitleEl = document.getElementById("preview-title");
+    const statusLineEl = document.getElementById("status-line");
+    let statusTimer = null;
+
+    function showStatus(text) {
+      statusLineEl.textContent = text;
+      statusLineEl.hidden = false;
+      clearTimeout(statusTimer);
+      statusTimer = setTimeout(() => { statusLineEl.hidden = true; }, 8000);
+    }
+
+    const BLANK_THUMB = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+    // Offline thumbnails fall back to the plain block behind them.
+    const thumb = (ref, extra = "") =>
+      `<img class="thumb" src="${thumbnailUrl(ref)}" alt="" ${extra} onerror="this.onerror=null;this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='" />`;
 
     let previewRequestId = 0;
 
@@ -191,7 +200,7 @@
       priceLineEl.textContent = `${myCurrencySymbol}${myPricePerUse} per song, added to your table's bill.`;
 
       nowPlayingEl.innerHTML = state.nowPlaying
-        ? `<div class="title-row"><img src="${thumbnailUrl(state.nowPlaying.songRef)}" alt="" /><span class="title">${escapeHtml(state.nowPlaying.songTitle)}</span></div>`
+        ? `<div class="title-row">${thumb(state.nowPlaying.songRef)}<span class="title">${escapeHtml(state.nowPlaying.songTitle)}</span></div>`
         : `<span class="empty">Nothing playing right now.</span>`;
 
       queueListEl.innerHTML = "";
@@ -206,8 +215,9 @@
         emptyQueueEl.hidden = true;
         state.queued.forEach((entry, i) => {
           const li = document.createElement("li");
-          if (entry.tableId === myTableId) li.classList.add("mine");
-          li.innerHTML = `<span class="position">${i + 1}</span><img src="${thumbnailUrl(entry.songRef)}" alt="" /><span>${escapeHtml(entry.songTitle)}</span>`;
+          const isMine = entry.tableId === myTableId;
+          if (isMine) li.classList.add("mine");
+          li.innerHTML = `<span class="position">${i + 1}</span>${thumb(entry.songRef)}<span>${escapeHtml(entry.songTitle)}</span>${isMine ? '<span class="yours">Your table</span>' : ""}`;
           queueListEl.appendChild(li);
         });
       }
@@ -218,7 +228,7 @@
         cancelButtonEl.hidden = false;
         cancelButtonEl.dataset.entryId = mine.id;
         if (mine.status === "playing") {
-          mineStatusTextEl.textContent = "Your song is playing now!";
+          mineStatusTextEl.textContent = "Your song is playing now.";
           cancelButtonEl.textContent = "Skip this song";
           cancelButtonEl.dataset.action = "skip";
         } else {
@@ -245,7 +255,7 @@
 
     function connectSocket() {
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${proto}//${location.host}`);
+      const ws = new WebSocket(`${proto}//${location.host}/?table=${encodeURIComponent(token)}`);
       ws.addEventListener("message", (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "queue-state") render(message);
@@ -257,6 +267,7 @@
 
     async function showPreview(videoId) {
       const requestId = ++previewRequestId;
+      previewThumbEl.onerror = () => { previewThumbEl.onerror = null; previewThumbEl.src = BLANK_THUMB; };
       previewThumbEl.src = thumbnailUrl(videoId);
       previewTitleEl.textContent = "Loading title…";
       previewEl.hidden = false;
@@ -265,10 +276,10 @@
         const res = await fetch(`/t/${token}/preview?videoId=${videoId}`);
         const body = await res.json().catch(() => ({}));
         if (requestId !== previewRequestId) return; // input changed since; stale response
-        previewTitleEl.textContent = body.title || "Couldn't find a title for this video.";
+        previewTitleEl.textContent = body.title || `YouTube video ${videoId}`;
       } catch {
         if (requestId !== previewRequestId) return;
-        previewTitleEl.textContent = "Couldn't load a preview — check your connection.";
+        previewTitleEl.textContent = "Couldn't load a preview. Check your connection.";
       }
     }
 
@@ -310,7 +321,8 @@
           res = await fetch(`/t/${token}/queue`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title: inputEl.value.trim(), songRef: videoId }),
+            // If YouTube can't be reached for the real title, a pasted URL makes a poor queue line.
+            body: JSON.stringify({ title: `YouTube video ${videoId}`, songRef: videoId }),
           });
         } catch {
           hintEl.textContent = "Couldn't reach the server. Check your connection and try again.";
@@ -347,9 +359,10 @@
         if (cancelButtonEl.dataset.action === "skip") {
           const res = await fetch(`/t/${token}/queue/${entryId}/skip`, { method: "POST" });
           const body = await res.json();
-          mineStatusTextEl.textContent = body.billable
+          // The panel closes as soon as the queue updates, so the result goes in a line that stays.
+          showStatus(body.billable
             ? "Skipped. This still counts toward your bill."
-            : "Skipped. Not charged since you caught it early.";
+            : "Skipped. Not charged, since you caught it in the first 15 seconds.");
           return;
         }
         await fetch(`/t/${token}/queue/${entryId}`, { method: "DELETE" });

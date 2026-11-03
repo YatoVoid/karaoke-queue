@@ -1,8 +1,5 @@
 # karaoke-queue
 
-![Mockup of the system in a restaurant](screenshots/mockup.png)
-*This image was AI generated, sadly, that guy's laptop is long af*
-
 A local-network song-request queue for restaurants and venues, built to
 replace expensive per-song paid karaoke systems (the common model in
 Azerbaijan: ~2 manat per song added to the bill) with a cheap or free,
@@ -13,14 +10,14 @@ separate player page drives the venue's actual speakers.
 ## Quick start
 
 **Requires Node.js 22.5 or newer** (it uses the built-in `node:sqlite`
-module — no database to install separately). Check with `node --version`.
+module, so there's no database to install separately). Check with `node --version`.
 
 ```
 npm install
 npm start
 ```
 
-That's it — no config file, no signup, no API keys. The terminal prints
+No config file, no signup, no API keys. The terminal prints
 a URL like this:
 
 ```
@@ -36,8 +33,8 @@ connected to the same network to set up tables:
 ```
 
 Open that URL (on the same device or any other device on the same
-network) and follow the numbered sections on the page — see
-"Setting up a venue" below for what each one does. There's no
+network) and follow the numbered sections on the page. "Setting up a
+venue" below explains each one. There's no
 venue "registration" step: a venue is just whatever id string you
 consistently use in your URLs (`main`, `downstairs`, anything).
 
@@ -54,6 +51,12 @@ Two environment variables control where it runs, if you need them:
 - `DB_PATH`: defaults to `./data/karaoke-queue.sqlite`. The database is
   a plain SQLite file with no migration system; delete it to start over.
 
+## Screenshots
+
+The screenshots below were taken offline, so YouTube couldn't load.
+The gray blocks stand in for video thumbnails and the player's video,
+and the song titles were typed in.
+
 ## Setting up a venue
 
 ![Admin page: currency, tables list with short pairing links, player link, background playlist](screenshots/admin.png)
@@ -64,17 +67,17 @@ you through this in order:
 1. **Set the currency** so prices show as an actual amount (e.g. `$2`)
    instead of a bare number.
 2. **Add your tables.** Each one is either `public` (pays a per-use
-   price) or `private` (always free — e.g. a room that's already
+   price) or `private` (always free, e.g. a room that's already
    charging a deposit). After adding a table, tap **Pair** to get its
    link (something short like `/t/K7X4MN`) and open that link on that
-   table's device — a tablet in kiosk mode, or just its bookmarked
+   table's device: a tablet in kiosk mode, or just its bookmarked
    homepage. Use the **Copy** button next to it if you're setting the
    link up from a different device than the one you're pairing.
    The admin table list also shows a running "Billed" count and total,
    so staff can read it directly at checkout instead of asking the
    guest what they played.
 3. **Create a player link** and open it on whatever device is
-   connected to the venue's speakers (Bluetooth or wired — that
+   connected to the venue's speakers (Bluetooth or wired; that
    connection is the OS's job, outside this software). That page is
    the only thing that actually plays audio; leave it open and
    full-screen on that device. Like table links, it's a short code you
@@ -83,8 +86,12 @@ you through this in order:
    or video IDs. This plays on a loop whenever no table has an active
    request, instead of silence.
 
-Both table and player links keep working even after a page reload —
-pairing a table again or revisiting admin won't invalidate what's
+Each table row has **Edit** and **Delete**. Edit opens the row in place
+(label, kind, price); Delete asks for a second press before it removes
+anything.
+
+Both table and player links keep working even after a page reload.
+Pairing a table again or revisiting admin won't invalidate what's
 already printed on a tablet or playing on the TV.
 
 ## What guests see
@@ -93,9 +100,10 @@ already printed on a tablet or playing on the TV.
 
 Opening a paired table link shows what's currently playing, the live
 queue (so a table can see how many requests are ahead of them), and a
-field to paste a YouTube link or video ID — pasting one shows a live
+field to paste a YouTube link or video ID. Pasting one shows the
 thumbnail and the real title before you submit, so you can confirm
-it's the right video. A table can have one active request at a time;
+it's the right video. The table's own request is marked in red in the
+queue. A table can have one active request at a time;
 once it's played (or cancelled), they can request again. Everything
 updates live via WebSocket, no refreshing needed, and refreshing
 doesn't help a table cheat the one-active-request rule either way,
@@ -106,7 +114,7 @@ remembers.
 
 A request interrupts the background playlist immediately (within a
 few seconds) rather than waiting for the current background track to
-finish — and if the background track gets interrupted mid-play, it
+finish. If the background track gets interrupted mid-play, it
 picks back up where it left off instead of restarting from zero.
 
 ## Correcting an accidental play
@@ -125,7 +133,10 @@ than waiting it out:
   got to actually hear the song.
 
 Either way, the venue's player switches to the next item immediately;
-the skipped video never plays out to the end.
+the skipped video never plays out to the end. The table page says
+which of the two happened.
+
+![Table page right after a skip: the next song is playing and a line says the skip was not charged](screenshots/table-request.png)
 
 <details>
 <summary><strong>Real-world network setups</strong> (multiple devices, hotspots, client isolation)</summary>
@@ -176,9 +187,10 @@ npm test
 
 Runs the whole suite with Node's built-in test runner. Some tests make
 real network calls (to YouTube's oEmbed endpoint), so it needs internet
-access and takes a few seconds — that's expected, not a hang.
+access and takes a while. Without internet those few tests fail and
+the rest still pass.
 
-## Known limitations (honest, not hidden)
+## Known limitations
 
 - **No typed song search.** Finding a song means pasting its YouTube link
   or video ID, not typing a title and picking from search results. Real

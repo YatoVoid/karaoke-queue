@@ -3,96 +3,88 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#05060a" />
+<meta name="theme-color" content="#000000" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <title>karaoke-queue player</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: dark; --black: #000; --ink: #f4f4f4; --ink-2: #a8a8a8; --rule: #333; --red: #e0203d; }
   * { box-sizing: border-box; }
-  /* Beats any element-specific display rule below. */
   [hidden] { display: none !important; }
   body {
     margin: 0;
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
-    background: #05060a;
-    color: #e8ecf1;
-    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--black);
+    color: var(--ink);
+    font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
   }
   #player-column { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  #yt-player-wrap { flex: 1; background: #000; min-height: 0; }
+  #yt-player-wrap { flex: 1; background: #1c1c1c; min-height: 0; }
   #yt-player { width: 100%; height: 100%; }
   #idle-message {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2rem;
-    color: #6b7280;
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--ink-2);
     text-align: center;
     padding: 20px;
   }
   #sidebar {
-    width: 280px;
+    width: 340px;
     flex-shrink: 0;
-    background: #12141a;
-    padding: 20px;
+    padding: 28px 24px;
     overflow-y: auto;
+    border-left: 1px solid var(--rule);
   }
-  #sidebar h2 { font-size: 0.95rem; color: #9aa3b2; margin: 0 0 12px; }
-
-  /* Narrow/portrait screens (phones): stack instead of a squeezed sidebar. */
+  #sidebar h2 {
+    font-size: 1.1rem;
+    margin: 0 0 4px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid var(--ink);
+  }
   @media (max-width: 700px) {
     body { flex-direction: column; height: 100vh; height: 100dvh; }
     #player-column { flex: none; }
     #yt-player-wrap, #idle-message { aspect-ratio: 16 / 9; flex: none; font-size: 1.4rem; }
-    #sidebar { width: 100%; flex: 1; min-height: 0; }
+    #sidebar { width: 100%; flex: 1; min-height: 0; border-left: 0; }
   }
-  ol#side-queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  ol#side-queue { list-style: none; margin: 0; padding: 0; }
   ol#side-queue li {
-    background: #1a1d24;
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-size: 0.9rem;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule);
+    font-size: 1.1rem;
     display: flex;
-    gap: 8px;
-    align-items: center;
+    gap: 14px;
+    align-items: baseline;
   }
-  ol#side-queue li .position { color: #6ee7ff; font-weight: 700; }
-  #banner-stack {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-  }
-  #connection-banner, #skip-banner {
-    font-weight: 700;
-    text-align: center;
-    padding: 6px;
-    font-size: 0.9rem;
-  }
-  #connection-banner { background: #ff6e6e; color: #2a0505; }
-  #skip-banner { background: #f5a623; color: #2a1c05; }
+  ol#side-queue li .position { font-weight: 700; font-size: 1.5rem; min-width: 2rem; }
+  ol#side-queue li:first-child .position { color: #f0475e; }
+  #side-empty { color: var(--ink-2); font-size: 1.1rem; margin: 12px 0 0; }
+  #banner-stack { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: flex; flex-direction: column; }
+  #connection-banner, #skip-banner { font-weight: 700; text-align: center; padding: 8px; font-size: 1rem; }
+  #connection-banner { background: var(--red); color: #fff; }
+  #skip-banner { background: var(--ink); color: var(--black); }
 </style>
 </head>
 <body>
   <div id="banner-stack">
     <div id="connection-banner" hidden>Reconnecting to the server…</div>
-    <div id="skip-banner" hidden>Skipped a video that can't play here — moving on…</div>
+    <div id="skip-banner" hidden>That video can't play here. Moving to the next one.</div>
   </div>
   <div id="player-column">
-    <div id="idle-message" hidden>Waiting for requests...</div>
+    <div id="idle-message" hidden>Waiting for the first song</div>
     <div id="yt-player-wrap" hidden><div id="yt-player"></div></div>
   </div>
   <div id="sidebar">
     <h2>Up next</h2>
     <ol id="side-queue"></ol>
-    <p id="side-empty" hidden style="color:#6b7280;font-size:0.9rem;">Nothing waiting.</p>
+    <p id="side-empty" hidden>Nothing waiting. Request a song from your table.</p>
   </div>
 
   <script src="https://www.youtube.com/iframe_api"></script>
@@ -234,7 +226,7 @@
 
     function connectSocket() {
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${proto}//${location.host}`);
+      const ws = new WebSocket(`${proto}//${location.host}/?player=${encodeURIComponent(token)}`);
       ws.addEventListener("open", () => {
         connectionBannerEl.hidden = true;
       });

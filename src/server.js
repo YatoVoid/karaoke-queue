@@ -503,6 +503,8 @@ function broadcastToClients(wss, db, venueId, extra = {}) {
     ...extra,
   });
   for (const client of wss.clients) {
+    // A page that said which venue it belongs to only hears about that venue.
+    if (client.venueId && client.venueId !== venueId) continue;
     if (client.readyState === client.OPEN) {
       client.send(message);
     }
@@ -526,6 +528,13 @@ export function createServer({ db }) {
   });
 
   wss = new WebSocketServer({ server: httpServer });
+  wss.on("connection", (ws, req) => {
+    const query = new URL(req.url ?? "/", "http://internal").searchParams;
+    const table = query.get("table");
+    const player = query.get("player");
+    const resolved = table ? resolveToken(db, table) : player ? resolvePlayerToken(db, player) : null;
+    if (resolved) ws.venueId = resolved.venueId;
+  });
 
   return { httpServer, wss, db };
 }

@@ -85,6 +85,29 @@ test("broadcastQueueState pushes queue state to connected WS clients", async () 
   await closeAll(httpServer, wss, ws);
 });
 
+test("a table's socket only hears about its own venue", async () => {
+  const db = openDatabase();
+  const { httpServer, wss } = createServer({ db });
+  const port = await listen(httpServer);
+  const { token } = await createAndPairTable(port);
+
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/?table=${token}`);
+  await new Promise((resolve) => ws.on("open", resolve));
+  const received = [];
+  ws.on("message", (data) => received.push(JSON.parse(data.toString())));
+
+  broadcastQueueState(wss, db, "another-venue");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(received.length, 0, "another venue's queue never reaches this table");
+
+  broadcastQueueState(wss, db, VENUE);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(received.length, 1);
+  assert.equal(received[0].venueId, VENUE);
+
+  await closeAll(httpServer, wss, ws);
+});
+
 test("POST /admin/venues/:venueId/tables creates a table", async () => {
   const db = openDatabase();
   const { httpServer, wss } = createServer({ db });

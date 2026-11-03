@@ -5,104 +5,96 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>karaoke-queue admin</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light; --paper: #fff; --ink: #111; --ink-2: #4a4a4a; --rule: #d9d9d9; --red: #c8102e; --tint: #f4f4f4; }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body {
     margin: 0;
     min-height: 100vh;
-    background: #0f1115;
-    color: #e8ecf1;
-    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-    padding: 24px 16px 48px;
-    max-width: 720px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+    padding: 28px 18px 56px;
+    max-width: 820px;
     margin-inline: auto;
+    font-variant-numeric: tabular-nums;
   }
-  h1 { font-size: 1.3rem; margin: 0 0 8px; }
-  .page-intro { color: #9aa3b2; font-size: 0.9rem; line-height: 1.5; margin: 0 0 24px; }
-  h2 { font-size: 1rem; color: #9aa3b2; margin: 28px 0 4px; }
-  .section-hint { color: #6b7280; font-size: 0.85rem; margin: 0 0 12px; line-height: 1.4; }
-  .panel { background: #1a1d24; border-radius: 14px; padding: 18px; }
+  h1 { font-size: 1.6rem; margin: 0 0 8px; }
+  .page-intro { color: var(--ink-2); line-height: 1.5; margin: 0 0 12px; max-width: 60ch; }
+  h2 { font-size: 1.05rem; margin: 36px 0 6px; padding-bottom: 6px; border-bottom: 3px solid var(--ink); }
+  .section-hint { color: var(--ink-2); font-size: 0.9rem; margin: 0 0 14px; line-height: 1.45; max-width: 64ch; }
+  .panel { padding: 4px 0 16px; }
+  .panel + .panel { border-top: 1px solid var(--rule); padding-top: 16px; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 14px 8px; border-bottom: 1px solid #2a2d36; font-size: 0.9rem; }
-  th { color: #9aa3b2; font-weight: 600; }
-  code { background: #0b0d11; padding: 3px 6px; border-radius: 6px; font-size: 0.85rem; word-break: break-all; }
+  th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--rule); font-size: 0.92rem; vertical-align: middle; }
+  th { font-weight: 700; font-size: 0.8rem; color: var(--ink-2); }
+  code { background: var(--tint); padding: 3px 6px; font-size: 0.85rem; word-break: break-all; }
   form { display: flex; flex-direction: column; gap: 10px; }
-  label { font-size: 0.85rem; color: #9aa3b2; }
+  label { font-size: 0.85rem; font-weight: 700; }
   input[type="text"], input[type="number"], select {
-    font-size: 1rem;
+    font: inherit;
     padding: 10px;
-    border-radius: 8px;
-    border: 1px solid #333;
-    background: #0b0d11;
-    color: #e8ecf1;
+    border-radius: 0;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
     width: 100%;
   }
   .field { display: flex; flex-direction: column; gap: 4px; }
   .row { display: flex; gap: 12px; }
   .row .field { flex: 1; }
   button {
+    font: inherit;
     font-size: 0.95rem;
     font-weight: 700;
     padding: 10px 16px;
     min-height: 44px;
-    border-radius: 8px;
-    border: none;
+    border-radius: 0;
+    border: 2px solid var(--ink);
     cursor: pointer;
-    background: #6ee7ff;
-    color: #062024;
-    transition: transform 0.08s ease, filter 0.08s ease;
+    background: var(--ink);
+    color: #fff;
+    align-self: flex-start;
   }
-  button:hover { filter: brightness(1.08); }
-  button:active { transform: scale(0.96); filter: brightness(0.85); }
-  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-  button.small { padding: 8px 14px; font-size: 0.9rem; min-height: 40px; }
-  .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+  button:hover { background: #333; }
+  button:active { transform: translateY(1px); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+  button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+  button.small { padding: 6px 12px; font-size: 0.88rem; min-height: 40px; }
+  button.quiet { background: var(--paper); color: var(--ink); }
+  button.quiet:hover { background: var(--tint); }
+  button.danger { background: var(--paper); color: var(--red); border-color: var(--red); }
+  button.danger.armed { background: var(--red); color: #fff; }
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
   .url-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .url-row code { flex: 1; min-width: 0; }
-  .hint { font-size: 0.85rem; color: #9aa3b2; min-height: 1.2em; margin: 0; }
-  .hint.error { color: #ff6e6e; }
-  .hint.success { color: #6ee7ff; }
+  .hint { font-size: 0.88rem; color: var(--ink-2); min-height: 1.2em; margin: 0; }
+  .hint.error { color: var(--red); }
+  .hint.success { color: var(--ink); font-weight: 700; }
+  .empty-note { color: var(--ink-2); margin: 10px 0 0; }
+  .edit-form { display: grid; grid-template-columns: 2fr 1.5fr 1fr auto; gap: 10px; align-items: end; }
+  #playlist-rows { list-style: none; margin: 0; padding: 0; }
   #playlist-rows li {
-    background: #0b0d11;
-    border-radius: 10px;
-    padding: 12px 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--rule);
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    font-size: 0.9rem;
   }
-
-  /* Phones and iPads: stack each row as a card instead. */
+  @media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
   @media (max-width: 900px) {
     .row { flex-direction: column; }
+    .edit-form { grid-template-columns: 1fr; }
     table, tbody, tr, td { display: block; width: 100%; }
     thead { display: none; }
-    tbody tr {
-      background: #0b0d11;
-      border-radius: 12px;
-      padding: 4px 14px;
-      margin-bottom: 12px;
-    }
-    td {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 0;
-      border-bottom: 1px solid #22252c;
-    }
+    tbody tr { border-top: 3px solid var(--ink); margin-bottom: 18px; }
+    td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; }
     td:last-child { border-bottom: none; }
-    td::before {
-      content: attr(data-label);
-      color: #9aa3b2;
-      font-weight: 600;
-      flex-shrink: 0;
-    }
+    td::before { content: attr(data-label); color: var(--ink-2); font-weight: 700; flex-shrink: 0; }
+    td.edit-cell { display: block; }
+    td.edit-cell::before { content: none; }
     td[data-label="Actions"] { flex-direction: column; align-items: stretch; }
-    td[data-label="Actions"]::before { margin-bottom: 6px; }
     td[data-label="Actions"] .btn-group button { flex: 1; }
   }
 </style>
@@ -120,7 +112,7 @@
   <div class="panel">
     <form id="currency-form">
       <div class="field">
-        <label>Currency</label>
+        <label for="currency-input">Currency</label>
         <select id="currency-input"></select>
       </div>
       <div class="url-row">
@@ -131,7 +123,7 @@
   </div>
 
   <h2>2. Tables</h2>
-  <p class="section-hint">Each table's link is what its guests use to request songs. Tap "Pair" to get one, then keep that device (a tablet, kiosk, whatever) open on it.</p>
+  <p class="section-hint">Each table's link is what its guests use to request songs. Press Pair to get one, then leave that table's device (a tablet, a kiosk) open on it.</p>
   <div class="panel">
     <table>
       <thead>
@@ -139,26 +131,26 @@
       </thead>
       <tbody id="table-rows"></tbody>
     </table>
-    <p id="no-tables" hidden style="color:#6b7280;">No tables yet — add one below.</p>
+    <p id="no-tables" class="empty-note" hidden>No tables yet. Add one below.</p>
     <p class="hint error" id="table-list-error" hidden></p>
   </div>
 
   <div class="panel">
     <form id="create-form">
       <div class="field">
-        <label>Label</label>
+        <label for="label-input">Label</label>
         <input type="text" id="label-input" placeholder="Table 5" required />
       </div>
       <div class="row">
         <div class="field">
-          <label>Kind</label>
+          <label for="kind-input">Kind</label>
           <select id="kind-input">
             <option value="public">Public (pays per use)</option>
             <option value="private">Private room (free)</option>
           </select>
         </div>
         <div class="field" id="price-field">
-          <label>Price per use</label>
+          <label for="price-input">Price per use</label>
           <input type="number" id="price-input" min="0" step="1" value="0" />
         </div>
       </div>
@@ -168,30 +160,30 @@
   </div>
 
   <h2>3. Player</h2>
-  <p class="section-hint">Open this link on whatever's connected to the speakers — a TV browser, a laptop, anything. Leave it open; it's the only thing that actually plays audio.</p>
+  <p class="section-hint">Open this link on whatever is connected to the speakers: a TV browser, a laptop, anything. Leave it open. It is the only screen that plays sound.</p>
   <div class="panel">
     <button id="create-player-button">Create player link</button>
     <div class="url-row" id="player-url-row" hidden>
       <code id="player-url"></code>
-      <button class="small" id="copy-player-url" type="button">Copy</button>
+      <button class="small quiet" id="copy-player-url" type="button">Copy</button>
     </div>
   </div>
 
   <h2>4. Background playlist</h2>
-  <p class="section-hint">Plays on loop whenever no table has an active request. Optional — skip this if you'd rather it stay silent between requests.</p>
+  <p class="section-hint">Plays on loop whenever no table has a request waiting. Optional. Skip it if you'd rather the room stays quiet between songs.</p>
   <div class="panel">
-    <ol id="playlist-rows" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;"></ol>
-    <p id="no-playlist-tracks" hidden style="color:#6b7280;">No playlist tracks yet. The queue falls back to silence when empty.</p>
+    <ol id="playlist-rows"></ol>
+    <p id="no-playlist-tracks" class="empty-note" hidden>No tracks yet. The room stays silent when the queue is empty.</p>
   </div>
 
   <div class="panel">
     <form id="playlist-form">
       <div class="field">
-        <label>Title</label>
+        <label for="playlist-title-input">Title</label>
         <input type="text" id="playlist-title-input" placeholder="Ambient track" required />
       </div>
       <div class="field">
-        <label>YouTube link or video ID</label>
+        <label for="playlist-song-input">YouTube link or video ID</label>
         <input type="text" id="playlist-song-input" placeholder="https://www.youtube.com/watch?v=..." required />
         <p class="hint" id="playlist-input-hint"></p>
       </div>
@@ -286,7 +278,7 @@
       }
 
       const original = buttonEl.textContent;
-      buttonEl.textContent = copied ? "Copied!" : "Copy failed";
+      buttonEl.textContent = copied ? "Copied" : "Copy failed";
       setTimeout(() => {
         buttonEl.textContent = original;
       }, 1500);
@@ -318,9 +310,9 @@
             ? `${t.billableCount} (${currencySymbol}${t.billableCount * t.pricePerUse})`
             : String(t.billableCount);
         const pairingCell = t.pairingUrl
-          ? `<div class="url-row"><code>${escapeHtml(t.pairingUrl)}</code><button class="small" data-copy-url="${escapeHtml(absoluteUrl(t.pairingUrl))}" type="button">Copy</button></div>`
+          ? `<div class="url-row"><code>${escapeHtml(t.pairingUrl)}</code><button class="small quiet" data-copy-url="${escapeHtml(absoluteUrl(t.pairingUrl))}" type="button">Copy</button></div>`
           : `<button class="small" data-pair-table-id="${t.id}">Pair</button>`;
-        tr.innerHTML = `<td data-label="Label">${escapeHtml(t.label)}</td><td data-label="Kind">${t.kind}</td><td data-label="Price">${priceText}</td><td data-label="Billed">${billedText}</td><td data-label="Pairing">${pairingCell}</td><td data-label="Actions"><div class="btn-group"><button class="small" data-edit-table-id="${t.id}" data-label="${escapeHtml(t.label)}" data-kind="${t.kind}" data-price="${t.pricePerUse}">Edit</button><button class="small" data-delete-table-id="${t.id}" data-label="${escapeHtml(t.label)}">Delete</button></div></td>`;
+        tr.innerHTML = `<td data-label="Label">${escapeHtml(t.label)}</td><td data-label="Kind">${t.kind}</td><td data-label="Price">${priceText}</td><td data-label="Billed">${billedText}</td><td data-label="Pairing">${pairingCell}</td><td data-label="Actions"><div class="btn-group"><button class="small quiet" data-edit-table-id="${t.id}">Edit</button><button class="small danger" data-delete-table-id="${t.id}">Delete</button></div></td>`;
         tableRowsEl.appendChild(tr);
       });
 
@@ -339,44 +331,25 @@
       });
 
       tableRowsEl.querySelectorAll("[data-edit-table-id]").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const tableId = btn.dataset.editTableId;
-          const label = window.prompt("Label:", btn.dataset.label);
-          if (label === null) return;
-          const kind = window.prompt("Kind (public/private):", btn.dataset.kind);
-          if (kind === null) return;
-          let pricePerUse = Number(btn.dataset.price) || 0;
-          if (kind === "public") {
-            const priceInput = window.prompt("Price per use:", btn.dataset.price);
-            if (priceInput === null) return;
-            pricePerUse = Number(priceInput);
-          }
-
-          tableListErrorEl.hidden = true;
-          await withBusy(btn, async () => {
-            const res = await fetch(`/admin/venues/${venueId}/tables/${tableId}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ label: label.trim(), kind, pricePerUse }),
-            });
-
-            if (!res.ok) {
-              const body = await res.json().catch(() => ({}));
-              tableListErrorEl.textContent = body.error || "Something went wrong. Try again.";
-              tableListErrorEl.hidden = false;
-              return;
-            }
-
-            await loadTables();
-          });
-        });
+        const table = tables.find((t) => String(t.id) === btn.dataset.editTableId);
+        btn.addEventListener("click", () => openEditRow(btn.closest("tr"), table));
       });
 
       tableRowsEl.querySelectorAll("[data-delete-table-id]").forEach((btn) => {
+        let disarm = null;
         btn.addEventListener("click", async () => {
+          // First press arms the button; a second press within a few seconds deletes.
+          if (!btn.classList.contains("armed")) {
+            btn.classList.add("armed");
+            btn.textContent = "Press again to delete";
+            disarm = setTimeout(() => {
+              btn.classList.remove("armed");
+              btn.textContent = "Delete";
+            }, 4000);
+            return;
+          }
+          clearTimeout(disarm);
           const tableId = btn.dataset.deleteTableId;
-          if (!window.confirm(`Delete "${btn.dataset.label}"? This cannot be undone.`)) return;
-
           tableListErrorEl.hidden = true;
           await withBusy(btn, async () => {
             const res = await fetch(`/admin/venues/${venueId}/tables/${tableId}`, { method: "DELETE" });
@@ -387,6 +360,55 @@
             }
             await loadTables();
           });
+        });
+      });
+    }
+
+    function openEditRow(tr, table) {
+      const uid = `edit-${table.id}`;
+      tr.innerHTML = `<td class="edit-cell" colspan="6"><form class="edit-form">
+        <div class="field"><label for="${uid}-label">Label</label><input type="text" id="${uid}-label" required value="${escapeHtml(table.label)}" /></div>
+        <div class="field"><label for="${uid}-kind">Kind</label><select id="${uid}-kind">
+          <option value="public">Public (pays per use)</option>
+          <option value="private">Private room (free)</option>
+        </select></div>
+        <div class="field"><label for="${uid}-price">Price per use</label><input type="number" id="${uid}-price" min="0" step="1" value="${table.pricePerUse}" /></div>
+        <div class="btn-group"><button type="submit" class="small">Save</button><button type="button" class="small quiet" data-cancel>Cancel</button></div>
+      </form></td>`;
+      const form = tr.querySelector("form");
+      const labelEl = form.querySelector(`#${uid}-label`);
+      const kindEl = form.querySelector(`#${uid}-kind`);
+      const priceEl = form.querySelector(`#${uid}-price`);
+      const priceField = priceEl.closest(".field");
+      kindEl.value = table.kind;
+      const syncPrice = () => { priceField.hidden = kindEl.value === "private"; };
+      kindEl.addEventListener("change", syncPrice);
+      syncPrice();
+      labelEl.focus();
+
+      form.querySelector("[data-cancel]").addEventListener("click", () => loadTables());
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const saveButton = form.querySelector('button[type="submit"]');
+        tableListErrorEl.hidden = true;
+        withBusy(saveButton, async () => {
+          const kind = kindEl.value;
+          const res = await fetch(`/admin/venues/${venueId}/tables/${table.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              label: labelEl.value.trim(),
+              kind,
+              pricePerUse: kind === "private" ? 0 : Number(priceEl.value) || 0,
+            }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            tableListErrorEl.textContent = body.error || "Something went wrong. Try again.";
+            tableListErrorEl.hidden = false;
+            return;
+          }
+          await loadTables();
         });
       });
     }
@@ -529,7 +551,7 @@
 
       tracks.forEach((track) => {
         const li = document.createElement("li");
-        li.innerHTML = `<span>${escapeHtml(track.title)}</span><button class="small" data-remove-track-id="${track.id}">Remove</button>`;
+        li.innerHTML = `<span>${escapeHtml(track.title)}</span><button class="small danger" data-remove-track-id="${track.id}">Remove</button>`;
         playlistRowsEl.appendChild(li);
       });
 
